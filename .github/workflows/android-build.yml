@@ -21,10 +21,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Python 2.7 for the legacy Waf/talloc build
+      - name: Set up Python 3.11 for legacy PRoot build scripts
         uses: actions/setup-python@v5
         with:
-          python-version: '2.7.18'
+          python-version: '3.11'
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -59,7 +59,23 @@ jobs:
               sleep $((attempt * 10))
             done
           }
-          retry_step "Build PRoot source dependencies" ./build.sh
+          retry_download() {
+            local step="$1"; local source_dir="$2"; shift 2
+            for attempt in 1 2 3 4 5; do
+              echo "${step} (attempt ${attempt}/5)"
+              rm -rf "$source_dir"
+              if "$@"; then return 0; fi
+              if [[ "$attempt" == 5 ]]; then echo "${step} failed after retries"; return 1; fi
+              sleep $((attempt * 10))
+            done
+          }
+          retry_download "Download talloc sources" "build/talloc-2.1.14" ./get-talloc.sh
+          retry_download "Download PRoot sources" "build/proot-0.15_release" ./get-proot.sh
+          echo "Converting bundled Waf/talloc Python 2 source to Python 3"
+          find build/talloc-2.1.14/third_party/waf build/talloc-2.1.14/buildtools/bin/waf -type f -print0 | xargs -0 python -m lib2to3 -w -n
+          retry_step "Build static talloc dependency" ./make-talloc-static.sh
+          retry_step "Build PRoot executables" ./make-proot.sh
+          retry_step "Package PRoot outputs" ./pack.sh
           retry_step "Create APK-compatible PRoot loaders" ./make-proot-for-apk.sh
           declare -A abi_map=(
             [aarch64]=arm64-v8a
