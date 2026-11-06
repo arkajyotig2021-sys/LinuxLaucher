@@ -127,7 +127,7 @@ jobs:
               # then become real tabs in the generated program and trigger
               # Python 3 TabError. Normalize those embedded indentation tabs.
               if path.name == "cc.py" and "wafadmin/Tools" in path.as_posix():
-                  source = source.replace(r"\t", "        ")
+                  source = source.replace(chr(92) + "t", "        ")
               normalized = source.expandtabs(8)
               if normalized != source:
                   path.write_text(normalized)
