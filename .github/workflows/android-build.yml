@@ -194,6 +194,12 @@ jobs:
               options = options.replace("if default_jobs < 1:", "default_jobs = int(default_jobs)\nif default_jobs < 1:", 1)
               options_path.write_text(options)
           PY
+          # The standalone talloc release omits this optional Samba hook, but
+          # its bundled lib/replace Waf script probes it unconditionally.
+          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_set_options <<'PY'
+          def set_options(opt):
+              pass
+          PY
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
