@@ -69,6 +69,39 @@ jobs:
               sleep $((attempt * 10))
             done
           }
+          # Samba's primary download host returned repeated 503/504 responses in CI.
+          # Fetch the same pinned release from mirrors and verify its published MD5 before extraction.
+          cat > get-talloc.sh <<'TALLOC_FETCH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          . ./config
+          cd "$BUILD_DIR"
+          target="talloc-$TALLOC_V"
+          [[ -d "$target" ]] && exit 0
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          expected="7478da02e309316231a497a9f17a980d"
+          urls=(
+            "https://mirror.freedif.org/pub/blfs/conglomeration/talloc/talloc-$TALLOC_V.tar.gz"
+            "https://macports.distfiles.ionic.de/talloc/talloc-$TALLOC_V.tar.gz"
+            "https://www.samba.org/ftp/talloc/talloc-$TALLOC_V.tar.gz"
+          )
+          for url in "${urls[@]}"; do
+            echo "Fetching talloc source from $url"
+            if curl --fail --location --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 "$url" -o "$tmp"; then
+              if echo "$expected  $tmp" | md5sum --check --status; then
+                mkdir -p "$target"
+                tar -xzf "$tmp" --strip-components=1 -C "$target"
+                echo "Verified talloc $TALLOC_V source archive"
+                exit 0
+              fi
+              echo "Checksum mismatch from $url; trying next mirror"
+            fi
+          done
+          echo "Unable to fetch a verified talloc $TALLOC_V archive from any mirror" >&2
+          exit 1
+          TALLOC_FETCH
+          chmod +x get-talloc.sh
           retry_download "Download talloc sources" "build/talloc-2.1.14" ./get-talloc.sh
           retry_download "Download PRoot sources" "build/proot-0.15_release" ./get-proot.sh
           echo "Converting bundled Waf/talloc Python 2 source to Python 3"
