@@ -229,7 +229,8 @@ jobs:
           PY
           # Validate the first target compiler and make it available to Waf.
           . ./config
-          set-arch aarch64
+          ARCH=aarch64
+          set-arch "$ARCH"
           echo "Android NDK C compiler: $CC"
           test -x "$CC"
           "$CC" --version
