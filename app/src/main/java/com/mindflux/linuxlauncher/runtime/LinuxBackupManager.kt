@@ -129,8 +129,15 @@ object LinuxBackupManager {
                     }
                 }
                 check(File(staging, "bin").exists() || File(staging, "usr/bin").exists()) { "Backup does not contain a valid Linux root filesystem" }
-                if (root.exists()) check(root.deleteRecursively()) { "Could not replace existing Linux filesystem" }
-                check(staging.renameTo(root)) { "Could not finalize restored Linux filesystem" }
+                val previous = File(root.parentFile, "rootfs.previous")
+                if (previous.exists()) check(previous.deleteRecursively()) { "Could not clear previous restore backup" }
+                val hadPrevious = root.exists()
+                if (hadPrevious) check(root.renameTo(previous)) { "Could not move current Linux filesystem aside" }
+                if (!staging.renameTo(root)) {
+                    if (hadPrevious) previous.renameTo(root)
+                    error("Could not finalize restored Linux filesystem; previous system was kept")
+                }
+                if (hadPrevious) previous.deleteRecursively()
                 onProgress("Restore complete")
             } catch (t: Throwable) {
                 staging.deleteRecursively()
