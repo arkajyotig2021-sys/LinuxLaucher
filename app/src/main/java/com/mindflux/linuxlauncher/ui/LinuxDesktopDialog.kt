@@ -1,11 +1,15 @@
 package com.mindflux.linuxlauncher.ui
 
+import android.net.Uri
 import android.webkit.WebView
+import android.net.Uri
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -13,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
+import com.mindflux.linuxlauncher.runtime.LinuxBackupManager
 import com.mindflux.linuxlauncher.runtime.LinuxRuntimeSession
 import com.mindflux.linuxlauncher.runtime.RuntimeBinaryLocator
 import com.mindflux.linuxlauncher.runtime.RuntimeCommandBuilder
@@ -23,10 +28,55 @@ import java.io.File
 
 @Composable
 fun LinuxEnvironmentChooserDialog(distroId:String,onDismiss:()->Unit,onTerminal:()->Unit,onDesktop:()->Unit) {
+ val context = LocalContext.current
+ val scope = rememberCoroutineScope()
+ var backupBusy by remember { mutableStateOf(false) }
+ var backupStatus by remember { mutableStateOf("") }
+ var backupError by remember { mutableStateOf<String?>(null) }
+ var restoreUri by remember { mutableStateOf<Uri?>(null) }
+ val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/gzip")) { uri ->
+  if (uri != null) scope.launch {
+   backupBusy = true; backupError = null; backupStatus = "Creating full rootfs backup…"
+   try {
+    val output = withContext(Dispatchers.IO) { context.contentResolver.openOutputStream(uri) } ?: error("Could not open the selected backup file")
+    LinuxBackupManager.backup(context, distroId, output) { progress -> scope.launch { backupStatus = progress } }
+    backupStatus = "Backup saved successfully."
+   } catch (t: Throwable) { backupError = t.message ?: "Backup failed." }
+   finally { backupBusy = false }
+  }
+ }
+ val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> restoreUri = uri }
  AlertDialog(onDismissRequest=onDismiss,title={Text("Open $distroId")},
-  text={Text("Terminal works with general OCI Linux images. One-click XFCE desktop setup currently supports Debian/Ubuntu package layouts.")},
-  confirmButton={Column { TextButton(onClick=onTerminal){Text("Open terminal")}; TextButton(onClick=onDesktop){Text("Install / open XFCE desktop")}}},
-  dismissButton={TextButton(onClick=onDismiss){Text("Close")}})
+  text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+   Text("Terminal works with general OCI Linux images. One-click XFCE desktop setup currently supports Debian/Ubuntu package layouts.")
+   Text("Full backup includes the Linux root filesystem. Restore replaces the currently installed root filesystem.", style=MaterialTheme.typography.bodySmall)
+   if (backupBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+   if (backupStatus.isNotBlank()) Text(backupStatus, style=MaterialTheme.typography.bodySmall)
+   backupError?.let { Text(it, color=MaterialTheme.colorScheme.error, style=MaterialTheme.typography.bodySmall) }
+  }},
+  confirmButton={Column {
+   TextButton(enabled=!backupBusy,onClick=onTerminal){Text("Open terminal")}
+   TextButton(enabled=!backupBusy,onClick=onDesktop){Text("Install / open XFCE desktop")}
+   TextButton(enabled=!backupBusy,onClick={exportPicker.launch("$distroId-full-backup.tar.gz")}){Text("Back up Linux")}
+   TextButton(enabled=!backupBusy,onClick={importPicker.launch(arrayOf("application/gzip","application/x-gzip","application/octet-stream"))}){Text("Restore Linux backup")}
+  }},
+  dismissButton={TextButton(onClick=onDismiss,enabled=!backupBusy){Text("Close")}})
+ if (restoreUri != null) {
+  AlertDialog(onDismissRequest={restoreUri=null},title={Text("Replace $distroId?")},
+   text={Text("Restoring this archive will replace the current Linux root filesystem. Make a backup first if you need to keep the current installation.")},
+   confirmButton={TextButton(onClick={
+    val uri=restoreUri!!; restoreUri=null; backupBusy=true; backupError=null; backupStatus="Restoring Linux rootfs…"
+    scope.launch {
+     try {
+      val input=withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)} ?: error("Could not open the selected backup")
+      LinuxBackupManager.restore(context,distroId,input){progress->scope.launch{backupStatus=progress}}
+      backupStatus="Restore completed successfully."
+     } catch(t:Throwable){backupError=t.message?:"Restore failed."}
+     finally{backupBusy=false}
+    }
+   }){Text("Replace Linux")},
+   dismissButton={TextButton(onClick={restoreUri=null}){Text("Cancel")}})
+ }
 }
 
 @Composable

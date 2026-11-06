@@ -18,8 +18,6 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.file.Files
-import java.nio.file.Path
 
 /** Full rootfs backup/restore using tar.gz; the archive preserves Linux symlinks and modes. */
 object LinuxBackupManager {
@@ -36,13 +34,13 @@ object LinuxBackupManager {
                     var count = 0
                     for (file in files) {
                         job.ensureActive()
-                        val relative = root.toPath().relativize(file.toPath()).toString().replace(File.separatorChar, '/')
+                        val relative = file.absolutePath.removePrefix(root.absolutePath).trimStart(File.separatorChar).replace(File.separatorChar, '/')
                         if (relative.isBlank()) continue
-                        val path = file.toPath()
+                        val symlinkTarget = try { Os.readlink(file.absolutePath) } catch (_: Exception) { null }
                         when {
-                            Files.isSymbolicLink(path) -> {
+                            symlinkTarget != null -> {
                                 val entry = TarArchiveEntry(relative, TarConstants.LF_SYMLINK)
-                                entry.linkName = Files.readSymbolicLink(path).toString()
+                                entry.linkName = symlinkTarget
                                 tar.putArchiveEntry(entry)
                                 tar.closeArchiveEntry()
                             }
