@@ -1,67 +1,33 @@
-# Linux Launcher — Phase 1 Foundation
+# Linux Launcher — Android Linux environments
 
-This is the first Android source-code milestone for the Linux Launcher project.
+Linux Launcher is an Android app that provides a hardware-aware interface for installing and running Linux userspaces through rootless PRoot. It shares Android's kernel; it is **not** a virtual machine and does not boot a separate Linux kernel.
 
-## What is implemented
+## Current implementation
 
-- Native Android application using Kotlin and Jetpack Compose.
-- Dashboard with the target device profile.
-- Searchable starter Linux distribution catalogue.
-- Distribution detail dialog with explicit runtime status disclosure.
-- Four-section navigation foundation for Home, Explore, My device and Settings.
-- Light/dark theme following Android system appearance.
-- Unit tests for distro catalogue search.
-- GitHub Actions workflow for unit tests and debug APK generation.
+- Native Android app using Kotlin and Jetpack Compose.
+- Four working navigation sections: Home, Explore, My device, Settings.
+- Preloaded searchable distro catalogue covering Debian-based, RPM-based, independent and minimal Linux environments.
+- OCI image reference field in the install dialog. Choose a catalogue entry or enter another public Docker Hub Linux image reference (`namespace/image:tag`).
+- OCI manifest selection for the Android device architecture, layer SHA-256 verification, rootfs extraction and path traversal protections.
+- Rootless PRoot terminal session for an installed root filesystem.
+- Device dashboard reports Android-exposed physical memory, app CPU time and thermal information where supported.
+- GitHub Actions builds the native PRoot runtime for ARM32, ARM64, x86 and x86_64, then runs tests and assembles a debug APK.
 
-## What is NOT implemented yet
+## Important compatibility limits
 
-This milestone does **not** install or boot Linux. It does not contain rootfs downloads,
-PRoot, a VM, desktop streaming, package-manager integration, GPU acceleration,
-hardware bridges, backup/restore, or a real download manager. The UI explicitly
-labels these sections as future runtime work rather than pretending they function.
-
-## Device target
-
-Designed as a lightweight starting point for practical Android phones and tablets.
-The current UI target is Android 7.0 (API 24) and newer, with architecture and
-Linux distribution compatibility checked separately. The app does not reserve
-or consume the full device RAM.
+- A Docker/OCI image is a userspace filesystem, not a complete bootable Linux OS. systemd, kernel modules, privileged services and hardware drivers generally do not run inside PRoot.
+- The custom image field currently targets public Docker Hub images. Private registries and arbitrary downloadable rootfs archive formats are not supported by this installer yet.
+- Not every image contains a shell or package manager, and not every distro/image works with Android's kernel or PRoot. Image availability is not a guarantee of runtime compatibility.
+- Graphical desktop streaming, pause/resume downloads, backup/restore and full package-manager orchestration are not part of the verified terminal milestone yet.
+- The cloud emulator cannot certify performance on every physical phone. Real-device validation on the OPPO A6X 5G is still required.
 
 ## Build
 
-Requirements:
-- JDK 17
-- Gradle 8.13
-- Android SDK platform 36 and build tools 36.0.0
-
-From the project root:
+Requirements: JDK 17, Gradle 8.13, Android SDK/NDK as configured in `.github/workflows/android-build.yml`.
 
 ```bash
 gradle testDebugUnitTest
 gradle assembleDebug
 ```
 
-The debug APK is generated at:
-
-`app/build/outputs/apk/debug/app-debug.apk`
-
-## GitHub Actions cloud build
-
-1. Create a GitHub repository.
-2. Upload this project folder's contents to the repository root.
-3. Open the Actions tab.
-4. Run **Android APK build** using **Run workflow**.
-5. Download the `LinuxLauncher-debug-apk` artifact after the workflow succeeds.
-
-## Version choices
-
-The project uses Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.21,
-and Compose BOM 2025.10.01. Verify compatibility against current Android
-tooling before upgrading these versions.
-
-## Project identity
-
-- Application ID: `com.mindflux.linuxlauncher`
-- Version: `0.1.0`
-- Minimum Android API: 24
-- Target Android API: 35
+GitHub Actions uploads `LinuxLauncher-debug-apk` only after the native runtime build, unit tests, emulator UI tests and APK assembly succeed.
