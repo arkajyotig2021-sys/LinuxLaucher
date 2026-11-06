@@ -200,6 +200,8 @@ jobs:
           def set_options(opt):
               pass
           PY
+          # The bundled talloc Waf version does not recognize this flag.
+          sed -i 's/--disable-rpath//g' make-talloc-static.sh
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
