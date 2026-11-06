@@ -33,8 +33,8 @@ class DistroCatalogTest {
     @Test
     fun onlyConfiguredDebianAndUbuntuProfilesAreMarkedRuntimeAvailable() {
         assertEquals(DistroStatus.RUNTIME_AVAILABLE, DistroCatalog.search("Ubuntu").single().status)
-        assertEquals(DistroStatus.RUNTIME_AVAILABLE, DistroCatalog.search("Debian").single().status)
-        assertEquals(DistroStatus.EXPERIMENTAL_OCI, DistroCatalog.search("Kali Linux").single().status)
+        assertEquals(DistroStatus.RUNTIME_AVAILABLE, DistroCatalog.all.single { it.id == "debian" }.status)
+        assertEquals(DistroStatus.EXPERIMENTAL_OCI, DistroCatalog.all.single { it.id == "kali" }.status)
         assertTrue(DistroCatalog.all.filter { it.id !in setOf("ubuntu", "debian", "kali") }
             .all { it.status == DistroStatus.CATALOG_ONLY })
     }
