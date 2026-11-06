@@ -14,25 +14,18 @@ object RuntimeCommandBuilder {
         return rootfs
     }
 
-    fun buildInteractiveShell(proot: File, rootfs: File): List<String> {
+    private fun baseCommand(proot: File, rootfs: File): List<String> {
         require(proot.isFile && proot.canExecute()) { "PRoot engine is not installed for this device" }
-        require(rootfs.isDirectory && File(rootfs, "bin").isDirectory) { "Linux root filesystem is not installed" }
-        return listOf(
-            proot.absolutePath,
-            "--link2symlink",
-            "-0",
-            "-r", rootfs.absolutePath,
-            "-b", "/dev",
-            "-b", "/proc",
-            "-b", "/sys",
-            "-w", "/root",
-            "/usr/bin/env", "-i",
-            "HOME=/root",
-            "USER=root",
-            "TERM=xterm-256color",
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-            "/bin/sh", "-l"
-        )
+        require(rootfs.isDirectory && (File(rootfs, "bin").isDirectory || File(rootfs, "usr/bin").isDirectory)) { "Linux root filesystem is not installed" }
+        return listOf(proot.absolutePath, "--link2symlink", "-0", "-r", rootfs.absolutePath,
+            "-b", "/dev", "-b", "/proc", "-b", "/sys", "-w", "/root",
+            "/usr/bin/env", "-i", "HOME=/root", "USER=root", "TERM=xterm-256color", "TMPDIR=/tmp",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    }
+    fun buildInteractiveShell(proot: File, rootfs: File): List<String> = baseCommand(proot, rootfs) + listOf("/bin/sh", "-l")
+    fun buildCommand(proot: File, rootfs: File, command: String): List<String> {
+        require(command.isNotBlank()) { "Linux command cannot be empty" }
+        return baseCommand(proot, rootfs) + listOf("/bin/sh", "-lc", command)
     }
 
     fun supportedAndroidAbi(supportedAbis: List<String>): String? =

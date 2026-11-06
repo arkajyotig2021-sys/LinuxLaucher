@@ -41,4 +41,23 @@ class RuntimeCommandBuilderTest {
         val rootfs = File(temp.root, "rootfs").apply { mkdirs(); File(this, "bin").mkdirs() }
         RuntimeCommandBuilder.buildInteractiveShell(File(temp.root, "missing-proot"), rootfs)
     }
+    @Test
+    fun buildsNonInteractiveCommandsWithoutShellArgumentSplitting() {
+        val binary = File(temp.root, "proot").apply { writeText("test"); setExecutable(true) }
+        val rootfs = File(temp.root, "command-rootfs").apply { mkdirs(); File(this, "bin").mkdirs() }
+        val command = RuntimeCommandBuilder.buildCommand(binary, rootfs, "apt-get update && echo ready")
+        assertEquals(binary.absolutePath, command.first())
+        assertTrue(command.contains("/bin/sh"))
+        assertTrue(command.contains("-lc"))
+        assertEquals("apt-get update && echo ready", command.last())
+        assertTrue(command.containsAll(listOf("/dev", "/proc", "/sys")))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsBlankNonInteractiveCommands() {
+        val binary = File(temp.root, "proot").apply { writeText("test"); setExecutable(true) }
+        val rootfs = File(temp.root, "command-rootfs").apply { mkdirs(); File(this, "bin").mkdirs() }
+        RuntimeCommandBuilder.buildCommand(binary, rootfs, "  ")
+    }
+
 }

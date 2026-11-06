@@ -7,11 +7,7 @@ class LinuxRuntimeSession(
     private val proot: File,
     private val rootfs: File
 ) {
-    fun startShell(): Process {
-        val command = RuntimeCommandBuilder.buildInteractiveShell(proot, rootfs)
-        return ProcessBuilder(command)
-            .directory(rootfs)
-            .redirectErrorStream(true)
-            .start()
-    }
+    fun startShell(): Process = start(RuntimeCommandBuilder.buildInteractiveShell(proot, rootfs))
+    fun startCommand(command: String): Process = start(RuntimeCommandBuilder.buildCommand(proot, rootfs, command))
+    private fun start(command: List<String>): Process = ProcessBuilder(command).directory(rootfs).redirectErrorStream(true).start()
 }

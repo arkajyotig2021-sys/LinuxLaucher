@@ -52,6 +52,8 @@ fun LauncherApp() {
     var selected by remember { mutableStateOf<Distro?>(null) }
     var installDistro by remember { mutableStateOf<Distro?>(null) }
     var terminalDistro by remember { mutableStateOf<String?>(null) }
+    var environmentDistro by remember { mutableStateOf<String?>(null) }
+    var desktopDistro by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mint, secondary = Lilac, background = Background,
@@ -132,10 +134,16 @@ fun LauncherApp() {
     installDistro?.let { distro ->
         LinuxInstallDialog(distro, onDismiss = { installDistro = null }, onInstalled = { id ->
             installDistro = null
-            terminalDistro = id
+            environmentDistro = id
         })
     }
+    environmentDistro?.let { id ->
+        LinuxEnvironmentChooserDialog(id, onDismiss = { environmentDistro = null },
+            onTerminal = { environmentDistro = null; terminalDistro = id },
+            onDesktop = { environmentDistro = null; desktopDistro = id })
+    }
     terminalDistro?.let { id -> LinuxTerminalDialog(id, onDismiss = { terminalDistro = null }) }
+    desktopDistro?.let { id -> LinuxDesktopDialog(id, onDismiss = { desktopDistro = null }) }
 }
 
 @Composable
