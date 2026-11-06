@@ -26,37 +26,41 @@ jobs:
         with:
           gradle-version: '8.13'
 
-      - name: Package Android PRoot binaries
+      - name: Install Android NDK for PRoot build
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'ndk;23.2.8568313'
+
+      - name: Build relocatable PRoot executables and loaders
         shell: bash
         run: |
           set -euo pipefail
-          base="https://github.com/green-green-avk/build-proot-android/raw/refs/heads/master/packages"
-          mkdir -p app/src/main/jniLibs
-          while read -r archive abi; do
-            work="$(mktemp -d)"
-            curl --fail --location --retry 3 "$base/$archive" -o "$work/proot.tar.gz"
-            tar -xzf "$work/proot.tar.gz" -C "$work"
-            root="$work/root"
-            test -d "$root/bin"
-            out="app/src/main/jniLibs/$abi"
+          mkdir -p "$HOME/Android/Sdk/ndk"
+          if [[ ! -e "$HOME/Android/Sdk/ndk/23.2.8568313" ]]; then
+            ln -s "$ANDROID_HOME/ndk/23.2.8568313" "$HOME/Android/Sdk/ndk/23.2.8568313"
+          fi
+          git clone --depth 1 https://github.com/green-green-avk/build-proot-android.git /tmp/build-proot-android
+          cd /tmp/build-proot-android
+          ./build.sh
+          ./make-proot-for-apk.sh
+          declare -A abi_map=(
+            [aarch64]=arm64-v8a
+            [armv7a]=armeabi-v7a
+            [x86_64]=x86_64
+            [i686]=x86
+          )
+          for arch in aarch64 armv7a x86_64 i686; do
+            src="$PWD/build/root-$arch/root-apk/bin"
+            test -s "$src/libproot.so"
+            test -s "$src/libproot-loader.so"
+            out="$GITHUB_WORKSPACE/app/src/main/jniLibs/${abi_map[$arch]}"
             mkdir -p "$out"
-            regular="$(find "$root" -type f -name proot -print -quit)"
-            userland="$(find "$root" -type f -name proot-userland -print -quit)"
-            loader="$(find "$root" -type f -name 'libproot-loader.so' -print -quit)"
-            test -n "$regular" && test -n "$userland" && test -n "$loader"
-            cp "$userland" "$out/libproot.so"
-            cp "$regular" "$out/libproot-regular.so"
-            cp "$loader" "$out/libproot-loader.so"
-            loader32="$(find "$root" -type f -name 'libproot-loader32.so' -print -quit)"
-            if [[ -n "$loader32" ]]; then cp "$loader32" "$out/libproot-loader32.so"; fi
+            cp "$src/libproot.so" "$out/libproot.so"
+            cp "$src/libproot-loader.so" "$out/libproot-loader.so"
+            if [[ -s "$src/libproot-loader32.so" ]]; then cp "$src/libproot-loader32.so" "$out/libproot-loader32.so"; fi
+            if [[ -s "$src/libproot-userland.so" ]]; then cp "$src/libproot-userland.so" "$out/libproot-userland.so"; fi
             chmod 755 "$out"/*.so
-            rm -rf "$work"
-          done <<'ARCHES'
-          proot-android-aarch64.tar.gz arm64-v8a
-          proot-android-armv7a.tar.gz armeabi-v7a
-          proot-android-x86_64.tar.gz x86_64
-          proot-android-i686.tar.gz x86
-          ARCHES
+          done
 
       - name: Run unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
