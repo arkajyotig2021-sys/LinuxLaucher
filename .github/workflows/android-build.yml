@@ -72,7 +72,11 @@ jobs:
           retry_download "Download talloc sources" "build/talloc-2.1.14" ./get-talloc.sh
           retry_download "Download PRoot sources" "build/proot-0.15_release" ./get-proot.sh
           echo "Converting bundled Waf/talloc Python 2 source to Python 3"
-          find build/talloc-2.1.14/third_party/waf build/talloc-2.1.14/buildtools/bin/waf -type f -print0 | xargs -0 python -m lib2to3 -w -n
+          find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
+          python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
+          find build/talloc-2.1.14/third_party/waf/wafadmin -type f -name '*.py' -exec sed -i -E \
+            -e 's/from \. import /import /g' \
+            -e 's/from \.([A-Za-z_][A-Za-z0-9_]*) import /from \1 import /g' {} +
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
