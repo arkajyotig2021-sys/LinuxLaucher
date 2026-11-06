@@ -24,6 +24,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,10 +59,10 @@ fun LauncherApp() {
             containerColor = Background,
             bottomBar = {
                 NavigationBar(containerColor = Color(0xFF111A25), tonalElevation = 0.dp) {
-                    NavItem(tab, Tab.HOME, "Home", Icons.Default.Dashboard) { tab = it }
-                    NavItem(tab, Tab.EXPLORE, "Explore", Icons.Default.GridView) { tab = it }
-                    NavItem(tab, Tab.DEVICE, "My device", Icons.Default.Memory) { tab = it }
-                    NavItem(tab, Tab.SETTINGS, "Settings", Icons.Default.Tune) { tab = it }
+                    NavItem(tab, Tab.HOME, "Home", Icons.Default.Dashboard, Modifier.weight(1f)) { tab = it }
+                    NavItem(tab, Tab.EXPLORE, "Explore", Icons.Default.GridView, Modifier.weight(1f)) { tab = it }
+                    NavItem(tab, Tab.DEVICE, "My device", Icons.Default.Memory, Modifier.weight(1f)) { tab = it }
+                    NavItem(tab, Tab.SETTINGS, "Settings", Icons.Default.Tune, Modifier.weight(1f)) { tab = it }
                 }
             }
         ) { inset ->
@@ -90,15 +93,26 @@ fun LauncherApp() {
 }
 
 @Composable
-private fun NavItem(current: Tab, item: Tab, label: String, icon: ImageVector, choose: (Tab) -> Unit) {
-    val selected = current == item
+private fun NavItem(
+    current: Tab,
+    item: Tab,
+    label: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    choose: (Tab) -> Unit
+) {
+    val isSelected = current == item
     Column(
-        modifier = Modifier.fillMaxWidth(0.25f).clickable { choose(item) }.padding(vertical = 7.dp),
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(role = Role.Tab) { choose(item) }
+            .semantics { selected = isSelected },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        verticalArrangement = Arrangement.Center
     ) {
-        Icon(icon, contentDescription = label, tint = if (selected) Mint else Muted)
-        Text(label, color = if (selected) Mint else Muted, fontSize = 9.sp, maxLines = 1)
+        Icon(icon, contentDescription = label, tint = if (isSelected) Mint else Muted)
+        Spacer(Modifier.height(3.dp))
+        Text(label, color = if (isSelected) Mint else Muted, fontSize = 9.sp, maxLines = 1)
     }
 }
 

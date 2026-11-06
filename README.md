@@ -8,7 +8,7 @@ This is the first Android source-code milestone for the Linux Launcher project.
 - Dashboard with the target device profile.
 - Searchable starter Linux distribution catalogue.
 - Distribution detail dialog with explicit runtime status disclosure.
-- Navigation foundation for Dashboard, Distros, Downloads and Performance.
+- Four-section navigation foundation for Home, Explore, My device and Settings.
 - Light/dark theme following Android system appearance.
 - Unit tests for distro catalogue search.
 - GitHub Actions workflow for unit tests and debug APK generation.
@@ -22,9 +22,10 @@ labels these sections as future runtime work rather than pretending they functio
 
 ## Device target
 
-Designed to be a lightweight starting point for the OPPO A6X 5G configuration
-reported for this project: 4 GB physical RAM and 128 GB internal storage.
-The app does not reserve or consume the full device RAM.
+Designed as a lightweight starting point for practical Android phones and tablets.
+The current UI target is Android 7.0 (API 24) and newer, with architecture and
+Linux distribution compatibility checked separately. The app does not reserve
+or consume the full device RAM.
 
 ## Build
 
@@ -55,12 +56,12 @@ The debug APK is generated at:
 ## Version choices
 
 The project uses Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.21,
-and Compose BOM 2026.09.00. Verify compatibility against current Android
+and Compose BOM 2025.10.01. Verify compatibility against current Android
 tooling before upgrading these versions.
 
 ## Project identity
 
 - Application ID: `com.mindflux.linuxlauncher`
 - Version: `0.1.0`
-- Minimum Android API: 26
+- Minimum Android API: 24
 - Target Android API: 35
