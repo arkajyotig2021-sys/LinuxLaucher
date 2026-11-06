@@ -132,7 +132,7 @@ jobs:
             test -s "$src"
             test -s "$header"
             obj="$BUILD_DIR/talloc-$TALLOC_V/talloc-$ARCH.o"
-            "$CC" -std=gnu99 -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -I"$BUILD_DIR/talloc-$TALLOC_V" -c "$src" -o "$obj"
+            "$CC" -std=gnu99 -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -I"$BUILD_DIR/talloc-$TALLOC_V" -I"$BUILD_DIR/talloc-$TALLOC_V/lib/replace" -c "$src" -o "$obj"
             "$AR" rcs "$STATIC_ROOT/lib/libtalloc.a" "$obj"
             "$RANLIB" "$STATIC_ROOT/lib/libtalloc.a"
             cp "$header" "$STATIC_ROOT/include/talloc.h"
