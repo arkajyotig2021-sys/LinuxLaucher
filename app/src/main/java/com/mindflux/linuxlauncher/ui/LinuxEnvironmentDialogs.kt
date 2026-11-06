@@ -73,16 +73,16 @@ fun LinuxInstallDialog(
                         value = image,
                         onValueChange = { image = it.trim() },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Docker Hub OCI image reference") },
-                        placeholder = { Text("ubuntu:24.04 or vendor/image:tag") },
+                        label = { Text("OCI image reference") },
+                        placeholder = { Text("ubuntu:24.04 or ghcr.io/owner/image:tag") },
                         singleLine = true
                     )
                 }
                 Text(
                     when {
                         complete -> "The root filesystem is stored in this app's private storage."
-                        image.isNotBlank() -> "Docker Hub OCI image: " + image + "\nThe installer verifies every downloaded layer before extraction."
-                        else -> "Enter a public Docker Hub Linux image reference above. Example: alpine:3.22 or vendor/image:tag."
+                        image.isNotBlank() -> "Public OCI image: " + image + "\nThe installer verifies every downloaded layer before extraction."
+                        else -> "Enter a public OCI Linux image reference above. Example: alpine:3.22 or ghcr.io/owner/image:tag."
                     }
                 )
                 if (running) {

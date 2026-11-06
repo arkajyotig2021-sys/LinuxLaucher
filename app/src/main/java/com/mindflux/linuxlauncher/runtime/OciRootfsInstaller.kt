@@ -90,7 +90,8 @@ class OciRootfsInstaller(private val filesDir: File) {
         val firstSlash = name.indexOf('/')
         val firstPart = if (firstSlash >= 0) name.substring(0, firstSlash) else ""
         val hasRegistry = firstSlash >= 0 && ('.' in firstPart || ':' in firstPart || firstPart == "localhost")
-        val registry = if (hasRegistry) firstPart else "registry-1.docker.io"
+        val detectedRegistry = if (hasRegistry) firstPart else "registry-1.docker.io"
+        val registry = if (detectedRegistry == "docker.io") "registry-1.docker.io" else detectedRegistry
         val rawRepo = if (hasRegistry) name.substring(firstSlash + 1) else name
         val repo = if (!hasRegistry && '/' !in rawRepo) "library/" + rawRepo else rawRepo
         require(registry.matches(Regex("[a-zA-Z0-9.-]+(:[0-9]{1,5})?"))) { "Invalid OCI registry host" }
