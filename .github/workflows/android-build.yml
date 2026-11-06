@@ -132,6 +132,17 @@ jobs:
               if normalized != source:
                   path.write_text(normalized)
           PY
+          # Normalize the generated C compiler task template before Waf compiles it.
+          python - <<'PY'
+          from pathlib import Path
+          cc_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Tools/cc.py")
+          cc_source = cc_path.read_text()
+          needle = "cls = Task.simple_task_type('cc', cc_str,"
+          replacement = "cc_str = cc_str.expandtabs(8)\n" + needle
+          if needle not in cc_source:
+              raise SystemExit("Could not find Waf C compiler task template")
+          cc_path.write_text(cc_source.replace(needle, replacement, 1))
+          PY
           # Waf loads Samba helpers as top-level modules, not as a Python package.
           # lib2to3's import fixer creates package-relative imports that fail in that mode.
           # Restore absolute sibling imports and assert the helper tree is package-independent.
