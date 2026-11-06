@@ -224,6 +224,25 @@ class OciRootfsInstaller(private val filesDir: File) {
                                 Os.symlink(target, out.absolutePath)
                             }
                         }
+                        entry.isLink -> {
+                            val linkName = entry.linkName.removePrefix("./").trimStart('/')
+                            val linkTarget = File(destination, linkName).canonicalFile
+                            require(linkTarget.path.startsWith(destination.canonicalPath + File.separator) && linkTarget.isFile) {
+                                "Invalid hard-link target in Linux image"
+                            }
+                            out.parentFile?.mkdirs()
+                            if (out.exists()) out.delete()
+                            try {
+                                Os.link(linkTarget.absolutePath, out.absolutePath)
+                            } catch (_: Throwable) {
+                                FileInputStream(linkTarget).use { input ->
+                                    FileOutputStream(out).use { output -> input.copyTo(output) }
+                                }
+                            }
+                            out.setReadable(entry.mode and 0b100100100 != 0, false)
+                            out.setWritable(entry.mode and 0b010010010 != 0, false)
+                            out.setExecutable(entry.mode and 0b001001001 != 0, false)
+                        }
                         entry.isFile -> {
                             out.parentFile?.mkdirs()
                             FileOutputStream(out).use { output -> tar.copyTo(output) }
