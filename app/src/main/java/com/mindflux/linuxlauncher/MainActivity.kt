@@ -25,13 +25,6 @@ class MainActivity : ComponentActivity() {
             LauncherNotifications.error(this, "Linux Launcher crashed", throwable.message ?: throwable.javaClass.simpleName)
             previousHandler?.uncaughtException(thread, throwable)
         }
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            val permissionPrefs = getSharedPreferences("linux_launcher_preferences", MODE_PRIVATE)
-            if (!permissionPrefs.getBoolean("notification_permission_asked", false)) {
-                permissionPrefs.edit().putBoolean("notification_permission_asked", true).apply()
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 71)
-            }
-        }
         setContent {
             LinuxLauncherTheme {
                 Surface(
@@ -39,6 +32,18 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     LauncherApp()
+                }
+            }
+        }
+        // Let the first screen render before showing the Android 13+ permission dialog.
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            val permissionPrefs = getSharedPreferences("linux_launcher_preferences", MODE_PRIVATE)
+            if (!permissionPrefs.getBoolean("notification_permission_asked", false)) {
+                permissionPrefs.edit().putBoolean("notification_permission_asked", true).apply()
+                window.decorView.post {
+                    if (!isFinishing && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 71)
+                    }
                 }
             }
         }

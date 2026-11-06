@@ -1,15 +1,23 @@
 package com.mindflux.linuxlauncher
 
+import android.Manifest
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
+import androidx.test.rule.GrantPermissionRule
 
 class LauncherNavigationTest {
+    private val composeRule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val permissionAndComposeRule: TestRule = RuleChain
+        .outerRule(GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS))
+        .around(composeRule)
 
     @Test
     fun allFourNavigationSectionsOpenTheirScreens() {
