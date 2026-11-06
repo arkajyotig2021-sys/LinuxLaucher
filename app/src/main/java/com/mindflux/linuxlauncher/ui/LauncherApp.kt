@@ -272,6 +272,7 @@ private fun DeviceDetails(d: DeviceProfile, modifier: Modifier = Modifier) {
             Text("Your device.", color = White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             Text("Live values queried from Android system services—not fixed demo numbers.", color = Muted, fontSize = 11.sp)
         }
+        item { PerformanceDashboard() }
         item {
             InfoCard("DEVICE IDENTITY") {
                 Text("${d.brand} ${d.model}", color = White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
