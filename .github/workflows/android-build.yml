@@ -128,6 +128,7 @@ jobs:
           # uses standard Android libc APIs, so provide the small feature header for NDK builds.
           cat > "$BUILD_DIR/talloc-$TALLOC_V/lib/replace/config.h" <<'TALLOC_CONFIG'
           #pragma once
+          #include <limits.h>
           #define TALLOC_BUILD_VERSION_MAJOR 2
           #define TALLOC_BUILD_VERSION_MINOR 1
           #define TALLOC_BUILD_VERSION_RELEASE 14
@@ -143,6 +144,9 @@ jobs:
           #define HAVE_VSNPRINTF 1
           #define HAVE_FPRINTF 1
           #define HAVE_INTPTR_T 1
+          #define HAVE_UINTPTR_T 1
+          #define HAVE_PTRDIFF_T 1
+          #define HAVE_USLEEP 1
           #define HAVE_SYS_AUXV_H 1
           #define HAVE_GETAUXVAL 1
           #define HAVE_VA_COPY 1
