@@ -33,11 +33,7 @@ jobs:
       - name: Install Android SDK and NDK for build
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;23.2.8568313
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0 ndk;23.2.8568313'
 
       - name: Fast Kotlin compile and unit-test gate
         run: gradle --no-daemon :app:compileDebugKotlin :app:testDebugUnitTest
