@@ -56,6 +56,7 @@ fun LauncherApp() {
         surface = SurfaceDark, onSurface = White, onBackground = White
     )) {
         Scaffold(
+            modifier = Modifier.fillMaxSize(),
             containerColor = Background,
             bottomBar = {
                 NavigationBar(containerColor = Color(0xFF111A25), tonalElevation = 0.dp) {
@@ -90,11 +91,18 @@ fun LauncherApp() {
                 }
             }
         ) { inset ->
-            when (tab) {
-                Tab.HOME -> Home(device, { tab = Tab.EXPLORE }, { tab = Tab.DEVICE }, Modifier.padding(inset))
-                Tab.EXPLORE -> Explore(query, { query = it }, { selected = it }, Modifier.padding(inset))
-                Tab.DEVICE -> DeviceDetails(device, Modifier.padding(inset))
-                Tab.SETTINGS -> Settings(Modifier.padding(inset))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(inset)
+                    .background(Background)
+            ) {
+                when (tab) {
+                    Tab.HOME -> Home(device, { tab = Tab.EXPLORE }, { tab = Tab.DEVICE }, Modifier.fillMaxSize())
+                    Tab.EXPLORE -> Explore(query, { query = it }, { selected = it }, Modifier.fillMaxSize())
+                    Tab.DEVICE -> DeviceDetails(device, Modifier.fillMaxSize())
+                    Tab.SETTINGS -> Settings(Modifier.fillMaxSize())
+                }
             }
         }
     }
