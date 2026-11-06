@@ -118,7 +118,7 @@ fun LauncherApp() {
                     Detail("Family", distro.family)
                     Detail("Desktop options", distro.desktopHint)
                     Detail("Architecture", distro.architecture)
-                    Text(if (distro.id == "ubuntu" || distro.id == "debian") "Install a real Linux root filesystem, then open its terminal." else "This distro is listed for discovery; its install image is not configured yet.", color = Color(0xFFFFC98B), fontSize = 11.sp)
+                    Text(if (distro.imageRef.isNotBlank()) "OCI image: ${distro.imageRef}. You can edit the image reference before installing." else "Paste a public Docker Hub image reference to install this or another Linux userspace.", color = Color(0xFFFFC98B), fontSize = 11.sp)
                 }
             },
             confirmButton = {
@@ -224,7 +224,7 @@ private fun Home(d: DeviceProfile, explore: () -> Unit, devicePage: () -> Unit, 
                 }
             }
         }
-        item { Text("This phase is the launcher interface and hardware detection. Linux installation and desktop runtime are not available yet.", color = Muted, fontSize = 10.sp) }
+        item { Text("Linux userspaces are installed from OCI images and run rootlessly through PRoot. Desktop sessions require a compatible userspace and additional setup.", color = Muted, fontSize = 10.sp) }
     }
 }
 

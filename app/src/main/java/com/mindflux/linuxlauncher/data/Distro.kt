@@ -7,27 +7,29 @@ data class Distro(
     val family: String,
     val desktopHint: String,
     val architecture: String = "ARM64 availability varies",
-    val status: DistroStatus = DistroStatus.CATALOG_ONLY
+    val status: DistroStatus = DistroStatus.CATALOG_ONLY,
+    val imageRef: String = ""
 )
 
-enum class DistroStatus {
-    CATALOG_ONLY,
-    RUNTIME_AVAILABLE,
-    NOT_COMPATIBLE
-}
+enum class DistroStatus { CATALOG_ONLY, RUNTIME_AVAILABLE, NOT_COMPATIBLE }
 
 object DistroCatalog {
     val all = listOf(
-        Distro("ubuntu", "Ubuntu", "A widely used Linux distribution with a large software ecosystem.", "Debian-based", "XFCE / LXQt"),
-        Distro("debian", "Debian", "A stable community distribution and foundation for many others.", "Debian-based", "XFCE / LXQt"),
-        Distro("arch", "Arch Linux", "A flexible rolling-release distribution for experienced users.", "Independent", "XFCE / LXQt"),
-        Distro("fedora", "Fedora", "A modern community distribution with up-to-date technologies.", "RPM-based", "XFCE / LXQt"),
-        Distro("alpine", "Alpine Linux", "A compact distribution designed with simplicity and security in mind.", "Independent", "XFCE (availability varies)"),
-        Distro("opensuse", "openSUSE", "A versatile distribution available in multiple release models.", "RPM-based", "XFCE / LXQt"),
-        Distro("void", "Void Linux", "An independent rolling-release Linux distribution.", "Independent", "XFCE / LXQt"),
-        Distro("kali", "Kali Linux", "A Debian-based distribution for authorised security education and testing.", "Debian-based", "XFCE"),
-        Distro("gentoo", "Gentoo", "A source-based distribution with extensive configuration options.", "Independent", "XFCE / LXQt"),
-        Distro("nixos", "NixOS", "A declarative Linux distribution with reproducible system configuration.", "Independent", "XFCE / LXQt")
+        Distro("ubuntu", "Ubuntu", "A widely used Linux distribution with a large software ecosystem.", "Debian-based", "XFCE / LXQt", imageRef = "ubuntu:24.04"),
+        Distro("debian", "Debian", "A stable community distribution and foundation for many others.", "Debian-based", "XFCE / LXQt", imageRef = "debian:bookworm"),
+        Distro("alpine", "Alpine Linux", "A compact, security-focused distribution using musl and BusyBox.", "Independent", "XFCE (manual setup)", imageRef = "alpine:3.22"),
+        Distro("fedora", "Fedora", "A modern community distribution with up-to-date technologies.", "RPM-based", "XFCE / LXQt", imageRef = "fedora:latest"),
+        Distro("arch", "Arch Linux", "A flexible rolling-release distribution for experienced users.", "Independent", "XFCE / LXQt", imageRef = "archlinux:latest"),
+        Distro("opensuse", "openSUSE Leap", "A stable RPM-based Linux distribution.", "RPM-based", "XFCE / LXQt", imageRef = "opensuse/leap:15.6"),
+        Distro("kali", "Kali Linux", "A Debian-based distribution for authorised security education and testing.", "Debian-based", "XFCE", imageRef = "kalilinux/kali-rolling"),
+        Distro("rocky", "Rocky Linux", "An enterprise-focused community Linux distribution.", "RPM-based", "XFCE / MATE", imageRef = "rockylinux:9"),
+        Distro("alma", "AlmaLinux", "An enterprise-compatible community Linux distribution.", "RPM-based", "XFCE / MATE", imageRef = "almalinux:9"),
+        Distro("oracle", "Oracle Linux", "An enterprise Linux distribution with OCI container images.", "RPM-based", "XFCE / MATE", imageRef = "oraclelinux:9"),
+        Distro("amazon", "Amazon Linux", "A Linux distribution designed for AWS workloads.", "RPM-based", "Terminal / lightweight desktop", imageRef = "amazonlinux:2023"),
+        Distro("busybox", "BusyBox Linux", "A tiny userspace useful for lightweight command-line environments; not a full desktop distro.", "Minimal userspace", "Terminal only", imageRef = "busybox:latest"),
+        Distro("gentoo", "Gentoo", "A source-based distribution with extensive configuration options.", "Independent", "XFCE / LXQt", imageRef = "gentoo/stage3:latest"),
+        Distro("nixos", "NixOS / Nix", "A reproducible package-management environment; full NixOS service boot is not provided by PRoot.", "Independent", "Terminal / lightweight desktop", imageRef = "nixos/nix:latest"),
+        Distro("custom-linux", "Custom Linux OCI image", "Use a public Docker Hub image for another Linux distribution or a custom root filesystem.", "Custom OCI", "Depends on image", imageRef = "")
     )
 
     fun search(query: String): List<Distro> {
@@ -36,7 +38,8 @@ object DistroCatalog {
         return all.filter {
             it.name.contains(normalized, ignoreCase = true) ||
                 it.description.contains(normalized, ignoreCase = true) ||
-                it.family.contains(normalized, ignoreCase = true)
+                it.family.contains(normalized, ignoreCase = true) ||
+                it.imageRef.contains(normalized, ignoreCase = true)
         }
     }
 }

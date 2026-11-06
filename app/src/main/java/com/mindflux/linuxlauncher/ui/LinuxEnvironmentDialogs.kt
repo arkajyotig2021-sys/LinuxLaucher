@@ -54,11 +54,7 @@ fun LinuxInstallDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val image = when (distro.id) {
-        "ubuntu" -> "ubuntu:24.04"
-        "debian" -> "debian:bookworm"
-        else -> null
-    }
+    var image by remember(distro.id) { mutableStateOf(distro.imageRef) }
     val root = File(context.filesDir, "linux-containers/" + distro.id + "/rootfs")
     var running by remember { mutableStateOf(false) }
     var complete by remember { mutableStateOf(root.resolve("bin").exists() || root.resolve("usr/bin").exists()) }
@@ -72,11 +68,21 @@ fun LinuxInstallDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(distro.description)
+                if (!complete) {
+                    OutlinedTextField(
+                        value = image,
+                        onValueChange = { image = it.trim() },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Docker Hub OCI image reference") },
+                        placeholder = { Text("ubuntu:24.04 or vendor/image:tag") },
+                        singleLine = true
+                    )
+                }
                 Text(
                     when {
                         complete -> "The root filesystem is stored in this app's private storage."
-                        image != null -> "Image: " + image + "\nThe download is verified layer-by-layer. Keep the app open and use a stable connection."
-                        else -> "This distribution is currently catalogue-only. Its installation image is not configured yet."
+                        image.isNotBlank() -> "Docker Hub OCI image: " + image + "\nThe installer verifies every downloaded layer before extraction."
+                        else -> "Enter a public Docker Hub Linux image reference above. Example: alpine:3.22 or vendor/image:tag."
                     }
                 )
                 if (running) {
@@ -93,12 +99,12 @@ fun LinuxInstallDialog(
         confirmButton = {
             when {
                 complete -> TextButton(onClick = { onInstalled(distro.id) }) { Text("Open terminal") }
-                image != null && !running -> TextButton(onClick = {
+                image.isNotBlank() && !running -> TextButton(onClick = {
                     running = true
                     error = null
                     scope.launch {
                         try {
-                            OciRootfsInstaller(context.filesDir).install(image, distro.id) { p ->
+                            OciRootfsInstaller(context.filesDir).install(image.trim(), distro.id) { p ->
                                 message = p.message
                                 if (p.total > 0) progress = (p.downloaded.toFloat() / p.total).coerceIn(0f, 1f)
                             }
