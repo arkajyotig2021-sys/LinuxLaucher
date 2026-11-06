@@ -57,3 +57,12 @@ The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk` after 
 - Application ID: `com.mindflux.linuxlauncher`
 - Minimum Android API: 24
 - Target Android API: 35
+
+
+## Compatibility and recovery guarantees
+
+- Ubuntu 24.04 and Debian Bookworm are the configured apt-based runtime profiles. Kali is experimental. Other catalogue entries are discovery entries only until their OCI rootfs, package manager, startup behaviour and desktop are validated. A registry image reference alone is not a compatibility guarantee.
+- Linux sessions run rootlessly through PRoot and share the Android kernel. systemd, kernel modules, privileged mounts, hardware acceleration and arbitrary init/service assumptions are not promised.
+- Recovery stores the last active distribution and reopens a fresh shell/desktop entry point. Android cannot resurrect a terminated process with its exact RAM, open descriptors or in-memory state.
+- CPU scheduling priority and desktop resolution are best-effort controls. The RAM reserve is an automatic-throttling threshold, not a hard memory quota; Android retains control of process scheduling and memory reclamation.
+- Backup traversal is streaming to avoid allocating a list of every rootfs entry. Large archive creation/restoration still needs emulator and physical-device interruption testing.

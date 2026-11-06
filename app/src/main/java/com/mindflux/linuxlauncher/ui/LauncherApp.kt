@@ -56,6 +56,8 @@ fun LauncherApp() {
     var environmentDistro by remember { mutableStateOf<String?>(null) }
     var desktopDistro by remember { mutableStateOf<String?>(null) }
     var recoveryDistro by remember(context) { mutableStateOf(LauncherSessionRecovery.pending(context)) }
+    LaunchedEffect(terminalDistro) { terminalDistro?.let { LauncherSessionRecovery.markActive(context, it) } }
+    LaunchedEffect(desktopDistro) { desktopDistro?.let { LauncherSessionRecovery.markActive(context, it) } }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mint, secondary = Lilac, background = Background,
@@ -122,6 +124,8 @@ fun LauncherApp() {
                     Detail("Family", distro.family)
                     Detail("Desktop options", distro.desktopHint)
                     Detail("Architecture", distro.architecture)
+                    Detail("Compatibility", distro.status.label)
+                    Text(distro.status.explanation, color = Color(0xFFFFC98B), fontSize = 11.sp)
                     Text(if (distro.imageRef.isNotBlank()) "OCI image: ${distro.imageRef}. You can edit the image reference before installing." else "Paste a public Docker Hub image reference to install this or another Linux userspace.", color = Color(0xFFFFC98B), fontSize = 11.sp)
                 }
             },
@@ -144,8 +148,8 @@ fun LauncherApp() {
             onTerminal = { environmentDistro = null; terminalDistro = id },
             onDesktop = { environmentDistro = null; desktopDistro = id })
     }
-    terminalDistro?.let { id -> LinuxTerminalDialog(id, onDismiss = { terminalDistro = null }) }
-    desktopDistro?.let { id -> LinuxDesktopDialog(id, onDismiss = { desktopDistro = null }) }
+    terminalDistro?.let { id -> LinuxTerminalDialog(id, onDismiss = { LauncherSessionRecovery.clear(context); terminalDistro = null }) }
+    desktopDistro?.let { id -> LinuxDesktopDialog(id, onDismiss = { LauncherSessionRecovery.clear(context); desktopDistro = null }) }
     recoveryDistro?.let { id ->
         AlertDialog(
             onDismissRequest = { LauncherSessionRecovery.clear(context); recoveryDistro = null },

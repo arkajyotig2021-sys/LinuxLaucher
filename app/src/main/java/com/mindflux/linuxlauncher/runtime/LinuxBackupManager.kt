@@ -30,9 +30,11 @@ object LinuxBackupManager {
                 TarArchiveOutputStream(gzip).use { tar ->
                     tar.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX)
                     tar.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX)
-                    val files = root.walkTopDown().toList()
+                    // Keep traversal lazy: a full Linux rootfs can contain hundreds of
+                    // thousands of entries and must not be copied into an in-memory List.
                     var count = 0
-                    for (file in files) {
+                    var bytesCopied = 0L
+                    for (file in root.walkTopDown()) {
                         job.ensureActive()
                         val relative = file.absolutePath.removePrefix(root.absolutePath).trimStart(File.separatorChar).replace(File.separatorChar, '/')
                         if (relative.isBlank()) continue
@@ -53,12 +55,21 @@ object LinuxBackupManager {
                                 val entry = TarArchiveEntry(file, relative)
                                 entry.size = file.length()
                                 tar.putArchiveEntry(entry)
-                                FileInputStream(file).use { it.copyTo(tar) }
+                                FileInputStream(file).use { source ->
+                                    val buffer = ByteArray(128 * 1024)
+                                    while (true) {
+                                        job.ensureActive()
+                                        val n = source.read(buffer)
+                                        if (n < 0) break
+                                        tar.write(buffer, 0, n)
+                                        bytesCopied += n
+                                    }
+                                }
                                 tar.closeArchiveEntry()
                             }
                         }
                         count++
-                        if (count % 300 == 0) onProgress("Backed up $count filesystem entries…")
+                        if (count % 300 == 0) onProgress("Backed up $count entries (${bytesCopied / (1024 * 1024)} MiB)…")
                     }
                     tar.finish()
                 }

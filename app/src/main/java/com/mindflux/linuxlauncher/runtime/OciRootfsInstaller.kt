@@ -17,6 +17,17 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
+
+/** Validates a server response before appending bytes to an interrupted OCI layer. */
+internal object DownloadResumePolicy {
+    fun shouldAppend(previousBytes: Long, statusCode: Int, contentRange: String?): Boolean {
+        if (previousBytes <= 0L || statusCode != HttpURLConnection.HTTP_PARTIAL) return false
+        val range = contentRange ?: error("Registry omitted Content-Range for resumed download")
+        require(range.startsWith("bytes $previousBytes-") ) { "Registry returned an unexpected byte range" }
+        return true
+    }
+}
+
 /** Registry-aware OCI rootfs installer. Linux shares Android's kernel; this is not a VM. */
 private data class OciImageReference(val registry: String, val repository: String, val tag: String)
 
@@ -175,14 +186,12 @@ class OciRootfsInstaller(private val filesDir: File) {
         if (previousBytes > 0L) c.setRequestProperty("Range", "bytes=" + previousBytes + "-")
         try {
             val status = c.responseCode
-            val append = previousBytes > 0L && status == HttpURLConnection.HTTP_PARTIAL
             if (status != HttpURLConnection.HTTP_OK && status != HttpURLConnection.HTTP_PARTIAL) {
                 error("Layer download failed (HTTP " + status + ")")
             }
+            val append = DownloadResumePolicy.shouldAppend(previousBytes, status, c.getHeaderField("Content-Range"))
             if (status == HttpURLConnection.HTTP_PARTIAL) {
-                require(append) { "Registry returned a partial response without a resume offset" }
-                val range = c.getHeaderField("Content-Range") ?: error("Registry omitted Content-Range for resumed download")
-                require(range.startsWith("bytes " + previousBytes + "-")) { "Registry returned an unexpected byte range" }
+                require(append) { "Registry returned a partial response without a valid resume offset" }
             }
             if (previousBytes > 0L && !append) partial.delete()
             val initialBytes = if (append) previousBytes else 0L

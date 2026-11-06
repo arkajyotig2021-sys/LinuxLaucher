@@ -29,6 +29,15 @@ object LauncherPreferences {
     fun setMode(context: Context, mode: PerformanceMode) { prefs(context).edit().putString("performance_mode", mode.name).apply() }
     fun adaptive(context: Context): Boolean = prefs(context).getBoolean("adaptive_performance", true)
     fun setAdaptive(context: Context, enabled: Boolean) { prefs(context).edit().putBoolean("adaptive_performance", enabled).apply() }
+    fun cpuLevel(context: Context): Int = prefs(context).getInt("cpu_level", 2).coerceIn(1, 3)
+    fun setCpuLevel(context: Context, level: Int) { prefs(context).edit().putInt("cpu_level", level.coerceIn(1, 3)).apply() }
+    fun ramReserveMb(context: Context): Int = prefs(context).getInt("ram_reserve_mb", 512).coerceIn(256, 1536)
+    fun setRamReserveMb(context: Context, value: Int) { prefs(context).edit().putInt("ram_reserve_mb", value.coerceIn(256, 1536)).apply() }
+    fun desktopResolution(context: Context): String = prefs(context).getString("desktop_resolution", "AUTO") ?: "AUTO"
+    fun setDesktopResolution(context: Context, value: String) {
+        require(value in setOf("AUTO", "800x600", "960x540", "1280x720"))
+        prefs(context).edit().putString("desktop_resolution", value).apply()
+    }
     fun externalNote(context: Context): String = prefs(context).getString("external_storage_note", "") ?: ""
     fun setExternalNote(context: Context, value: String) { prefs(context).edit().putString("external_storage_note", value).apply() }
 }
@@ -39,21 +48,26 @@ object PerformancePolicy {
         (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(memory)
         val thermal = if (Build.VERSION.SDK_INT >= 29) (context.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus else 0
         val selected = LauncherPreferences.mode(context)
-        val constrained = memory.availMem < 650L * 1024L * 1024L || thermal >= 3
-        val warm = memory.availMem < 1024L * 1024L * 1024L || thermal >= 2
+        val reserveBytes = LauncherPreferences.ramReserveMb(context).toLong() * 1024L * 1024L
+        val constrained = memory.availMem < reserveBytes || thermal >= 3
+        val warm = memory.availMem < (reserveBytes * 3L / 2L).coerceAtLeast(768L * 1024L * 1024L) || thermal >= 2
         val effective = if (LauncherPreferences.adaptive(context)) {
             when { constrained -> PerformanceMode.BATTERY_SAVER; warm && selected == PerformanceMode.SMOOTH -> PerformanceMode.BALANCED; else -> selected }
         } else selected
-        val priority = when (effective) {
-            PerformanceMode.SMOOTH -> android.os.Process.THREAD_PRIORITY_DEFAULT
-            PerformanceMode.BALANCED -> android.os.Process.THREAD_PRIORITY_LESS_FAVORABLE
-            PerformanceMode.BATTERY_SAVER -> android.os.Process.THREAD_PRIORITY_BACKGROUND
+        val selectedPriority = when (LauncherPreferences.cpuLevel(context)) {
+            1 -> android.os.Process.THREAD_PRIORITY_BACKGROUND
+            2 -> android.os.Process.THREAD_PRIORITY_LESS_FAVORABLE
+            else -> android.os.Process.THREAD_PRIORITY_DEFAULT
         }
-        val geometry = when (effective) {
+        val priority = if (effective == PerformanceMode.BATTERY_SAVER) android.os.Process.THREAD_PRIORITY_BACKGROUND
+            else if (effective == PerformanceMode.BALANCED) maxOf(selectedPriority, android.os.Process.THREAD_PRIORITY_LESS_FAVORABLE)
+            else selectedPriority
+        val automaticGeometry = when (effective) {
             PerformanceMode.SMOOTH -> "1280x720"
             PerformanceMode.BALANCED -> "960x540"
             PerformanceMode.BATTERY_SAVER -> "800x600"
         }
+        val geometry = LauncherPreferences.desktopResolution(context).let { if (it == "AUTO") automaticGeometry else it }
         val reason = when {
             constrained -> "Reduced workload: low available RAM or high thermal status"
             warm && effective != selected -> "Balanced automatically to protect responsiveness"
@@ -132,12 +146,24 @@ object LauncherErrorHistory {
 
 object LauncherSessionRecovery {
     private const val PREFS = "linux_launcher_session"
-    fun markActive(context: Context, distroId: String) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("active", true).putString("distro", distroId).apply() }
+    fun markActive(context: Context, distroId: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean("active", true).putString("distro", distroId)
+            .putLong("checkpoint_time", System.currentTimeMillis()).apply()
+    }
     fun pending(context: Context): String? {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return if (p.getBoolean("active", false)) p.getString("distro", null) else null
+        val id = if (p.getBoolean("active", false)) p.getString("distro", null) else null
+        if (id != null && id.matches(Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,39}")) &&
+            File(context.filesDir, "linux-containers/$id/rootfs").isDirectory) return id
+        if (id != null) clear(context)
+        return null
     }
-    fun clear(context: Context) { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("active", false).remove("distro").apply() }
+    fun checkpointTime(context: Context): Long = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong("checkpoint_time", 0L)
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean("active", false).remove("distro").remove("checkpoint_time").apply()
+    }
 }
 
 object LinuxSystemRegistry {
@@ -169,13 +195,21 @@ object LinuxExternalFiles {
         val target = File(sharedDirectory(context, distroId), name).canonicalFile
         require(target.parentFile == sharedDirectory(context, distroId).canonicalFile)
         val input = context.contentResolver.openInputStream(uri) ?: error("Cannot read selected external file")
-        input.use { source -> FileOutputStream(target).use { source.copyTo(it) } }
+        input.use { source -> FileOutputStream(target).use { output ->
+            val buffer = ByteArray(128 * 1024)
+            while (true) { val n = source.read(buffer); if (n < 0) break; output.write(buffer, 0, n) }
+            output.fd.sync()
+        } }
         return target
     }
     fun export(context: Context, source: File, destination: Uri) {
         require(source.isFile && source.canonicalPath.startsWith(File(context.filesDir, "linux-containers").canonicalPath + File.separator))
         val output = context.contentResolver.openOutputStream(destination) ?: error("Cannot write selected external destination")
-        output.use { target -> FileInputStream(source).use { it.copyTo(target) } }
+        output.use { target -> FileInputStream(source).use { input ->
+            val buffer = ByteArray(128 * 1024)
+            while (true) { val n = input.read(buffer); if (n < 0) break; target.write(buffer, 0, n) }
+            target.flush()
+        } }
     }
 }
 

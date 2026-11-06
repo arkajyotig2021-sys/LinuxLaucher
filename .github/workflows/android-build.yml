@@ -111,6 +111,18 @@ jobs:
           find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
           python -m lib2to3 -w -n build/talloc-2.1.14/wscript build/talloc-2.1.14/buildtools
           python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
+          # Waf imports wafsamba as a top-level module, not as a package.
+          # Python 3 rejects the old relative import used by this bundled Samba helper.
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          package = Path("build/talloc-2.1.14/buildtools/wafsamba")
+          for path in package.glob("*.py"):
+              source = path.read_text()
+              fixed = re.sub(r"(?m)^from \.([A-Za-z_][A-Za-z0-9_]*) import ", r"from \1 import ", source)
+              if fixed != source:
+                  path.write_text(fixed)
+          PY
           find build/talloc-2.1.14/third_party/waf/wafadmin -type f -name '*.py' -exec sed -i -E \
             -e 's/from \. import /import /g' \
             -e 's/from \.([A-Za-z_][A-Za-z0-9_]*) import /from \1 import /g' {} +

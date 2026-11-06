@@ -57,6 +57,9 @@ internal fun AdvancedSettingsScreen(onOpenDistro: (String) -> Unit, modifier: Mo
     val scope = rememberCoroutineScope()
     var mode by remember { mutableStateOf(LauncherPreferences.mode(context)) }
     var adaptive by remember { mutableStateOf(LauncherPreferences.adaptive(context)) }
+    var cpuLevel by remember { mutableStateOf(LauncherPreferences.cpuLevel(context)) }
+    var ramReserve by remember { mutableStateOf(LauncherPreferences.ramReserveMb(context)) }
+    var desktopResolution by remember { mutableStateOf(LauncherPreferences.desktopResolution(context)) }
     var systems by remember { mutableStateOf(LinuxSystemRegistry.list(context)) }
     var targetDistro by remember { mutableStateOf("") }
     var sharedFiles by remember { mutableStateOf(emptyList<java.io.File>()) }
@@ -112,6 +115,31 @@ internal fun AdvancedSettingsScreen(onOpenDistro: (String) -> Unit, modifier: Mo
                     }
                     Switch(checked = adaptive, onCheckedChange = { adaptive = it; LauncherPreferences.setAdaptive(context, it) })
                 }
+            }
+        }
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Advanced resource controls", style = MaterialTheme.typography.titleMedium)
+                Text("These are best-effort controls for a rootless Android app, not hard CPU or RAM quotas. Android still decides system scheduling and memory reclaim.", style = MaterialTheme.typography.bodySmall)
+                Text("Linux process scheduling", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(1 to "Low", 2 to "Normal", 3 to "High").forEach { (value, label) ->
+                        FilterChip(selected = cpuLevel == value, onClick = { cpuLevel = value; LauncherPreferences.setCpuLevel(context, value) }, label = { Text(label, fontSize = 10.sp) })
+                    }
+                }
+                Text("Free-RAM reserve before automatic throttling: ${ramReserve} MB", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(384, 512, 768, 1024).forEach { value ->
+                        FilterChip(selected = ramReserve == value, onClick = { ramReserve = value; LauncherPreferences.setRamReserveMb(context, value) }, label = { Text("${value}M", fontSize = 10.sp) })
+                    }
+                }
+                Text("Desktop resolution", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("AUTO", "800x600", "960x540", "1280x720").forEach { value ->
+                        FilterChip(selected = desktopResolution == value, onClick = { desktopResolution = value; LauncherPreferences.setDesktopResolution(context, value) }, label = { Text(value, fontSize = 9.sp) })
+                    }
+                }
+                Text("Resolution and scheduling settings apply when the next Linux process or desktop session starts. The RAM value is an adaptation threshold, not a memory cap.", style = MaterialTheme.typography.bodySmall)
             }
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {

@@ -11,17 +11,22 @@ data class Distro(
     val imageRef: String = ""
 )
 
-enum class DistroStatus { CATALOG_ONLY, RUNTIME_AVAILABLE, NOT_COMPATIBLE }
+enum class DistroStatus(val label: String, val explanation: String) {
+    RUNTIME_AVAILABLE("Configured runtime profile", "The rootfs installer and apt-based runtime path are configured for this distribution. Desktop and physical-device validation are still pending."),
+    EXPERIMENTAL_OCI("Experimental OCI userspace", "The OCI root filesystem may extract, but package-manager behaviour, startup services and desktop compatibility are not validated."),
+    CATALOG_ONLY("Catalogue entry only", "This is listed for discovery. A generic OCI image reference does not mean this distribution is installable or fully functional here."),
+    NOT_COMPATIBLE("Not compatible", "This distribution is not currently supported by this device/runtime configuration.")
+}
 
 object DistroCatalog {
     val all = listOf(
-        Distro("ubuntu", "Ubuntu", "A widely used Linux distribution with a large software ecosystem.", "Debian-based", "XFCE / LXQt", imageRef = "ubuntu:24.04"),
-        Distro("debian", "Debian", "A stable community distribution and foundation for many others.", "Debian-based", "XFCE / LXQt", imageRef = "debian:bookworm"),
+        Distro("ubuntu", "Ubuntu", "A widely used Linux distribution with a large software ecosystem.", "Debian-based", "XFCE", status = DistroStatus.RUNTIME_AVAILABLE, imageRef = "ubuntu:24.04"),
+        Distro("debian", "Debian", "A stable community distribution and foundation for many others.", "Debian-based", "XFCE", status = DistroStatus.RUNTIME_AVAILABLE, imageRef = "debian:bookworm"),
         Distro("alpine", "Alpine Linux", "A compact, security-focused distribution using musl and BusyBox.", "Independent", "XFCE (manual setup)", imageRef = "alpine:3.22"),
         Distro("fedora", "Fedora", "A modern community distribution with up-to-date technologies.", "RPM-based", "XFCE / LXQt", imageRef = "fedora:latest"),
         Distro("arch", "Arch Linux", "A flexible rolling-release distribution for experienced users.", "Independent", "XFCE / LXQt", imageRef = "archlinux:latest"),
         Distro("opensuse", "openSUSE Leap", "A stable RPM-based Linux distribution.", "RPM-based", "XFCE / LXQt", imageRef = "opensuse/leap:15.6"),
-        Distro("kali", "Kali Linux", "A Debian-based distribution for authorised security education and testing.", "Debian-based", "XFCE", imageRef = "kalilinux/kali-rolling"),
+        Distro("kali", "Kali Linux", "A Debian-based distribution for authorised security education and testing.", "Debian-based", "Terminal (experimental)", status = DistroStatus.EXPERIMENTAL_OCI, imageRef = "kalilinux/kali-rolling"),
         Distro("rocky", "Rocky Linux", "An enterprise-focused community Linux distribution.", "RPM-based", "XFCE / MATE", imageRef = "rockylinux:9"),
         Distro("alma", "AlmaLinux", "An enterprise-compatible community Linux distribution.", "RPM-based", "XFCE / MATE", imageRef = "almalinux:9"),
         Distro("oracle", "Oracle Linux", "An enterprise Linux distribution with OCI container images.", "RPM-based", "XFCE / MATE", imageRef = "oraclelinux:9"),
