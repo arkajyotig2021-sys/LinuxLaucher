@@ -111,15 +111,27 @@ jobs:
           find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
           python -m lib2to3 -w -n build/talloc-2.1.14/wscript build/talloc-2.1.14/buildtools
           python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
-          # Waf imports wafsamba as a top-level module, not as a package.
-          # Python 3 rejects the old relative import used by this bundled Samba helper.
+          # Waf loads Samba helpers as top-level modules, not as a Python package.
+          # lib2to3's import fixer creates package-relative imports that fail in that mode.
+          # Restore absolute sibling imports and assert the helper tree is package-independent.
           python - <<'PY'
           from pathlib import Path
           import re
           package = Path("build/talloc-2.1.14/buildtools/wafsamba")
-          for path in package.glob("*.py"):
+          for path in package.rglob("*.py"):
               source = path.read_text()
-              fixed = re.sub(r"(?m)^from \.([A-Za-z_][A-Za-z0-9_]*) import ", r"from \1 import ", source)
+              fixed = re.sub(
+                  r"(?m)^from \. import ([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*$",
+                  r"import \1",
+                  source,
+              )
+              fixed = re.sub(
+                  r"(?m)^from \.([A-Za-z_][A-Za-z0-9_]*) import ",
+                  r"from \1 import ",
+                  fixed,
+              )
+              if re.search(r"(?m)^from \.", fixed):
+                  raise SystemExit("Unresolved package-relative import in %s" % path)
               if fixed != source:
                   path.write_text(fixed)
           PY
