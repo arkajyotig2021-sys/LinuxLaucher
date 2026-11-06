@@ -62,7 +62,12 @@ jobs:
           new = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
           if old not in s:
               raise SystemExit("Expected hardcoded NDK path not found in upstream config")
-          p.write_text(s.replace(old, new, 1))
+          s = s.replace(old, new, 1)
+          old_arches = "ARCHS='aarch64 armv7a armv7a-pre5 x86_64 i686 i686-pre5'"
+          new_arches = "ARCHS='aarch64 armv7a x86_64 i686'"
+          if old_arches not in s:
+              raise SystemExit("Expected upstream architecture matrix not found")
+          p.write_text(s.replace(old_arches, new_arches, 1))
           PY
           retry_step() {
             local step="$1"; shift
