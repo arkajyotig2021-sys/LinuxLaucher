@@ -203,10 +203,17 @@ jobs:
 
       - name: Run Android UI tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
+        timeout-minutes: 20
         with:
-          api-level: 35
+          api-level: 34
+          target: google_apis
           arch: x86_64
           profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data
+          emulator-boot-timeout: 600
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
 
