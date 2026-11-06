@@ -51,7 +51,9 @@ class OciRootfsInstaller(private val filesDir: File) {
                 }
                 val layers = selected.getJSONArray("layers")
                 for (i in 0 until layers.length()) {
-                    val digest = layers.getJSONObject(i).getString("digest")
+                    val layer = layers.getJSONObject(i)
+                    val digest = layer.getString("digest")
+                    val mediaType = layer.optString("mediaType")
                     require(digest.matches(Regex("sha256:[a-f0-9]{64}"))) { "Invalid layer digest" }
                     val archive = File(work, digest.removePrefix("sha256:") + ".layer")
                     if (!archive.isFile || sha256(archive) != digest.removePrefix("sha256:")) {
@@ -63,7 +65,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                         check(sha256(archive) == digest.removePrefix("sha256:")) { "Layer checksum failed" }
                     }
                     onProgress(Progress("Extracting layer " + (i + 1) + "/" + layers.length()))
-                    extractLayer(archive, staging)
+                    extractLayer(archive, staging, mediaType)
                 }
                 check(File(staging, "bin").exists() || File(staging, "usr/bin").exists()) {
                     "Downloaded image is not a valid Linux root filesystem"
@@ -181,45 +183,53 @@ class OciRootfsInstaller(private val filesDir: File) {
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun extractLayer(archive: File, destination: File) {
+    private fun extractLayer(archive: File, destination: File, mediaType: String) {
+        require(!mediaType.contains("zstd", ignoreCase = true)) {
+            "This OCI image uses zstd-compressed layers; this build currently supports gzip and uncompressed tar layers"
+        }
         FileInputStream(archive).use { file ->
-            GzipCompressorInputStream(BufferedInputStream(file)).use { gzip ->
-                TarArchiveInputStream(gzip).use { tar ->
-                    while (true) {
-                        val entry = tar.nextTarEntry ?: break
-                        val name = entry.name.replace('\\', '/').trimStart('/')
-                        if (name.isBlank()) continue
-                        val out = File(destination, name).canonicalFile
-                        require(out.path == destination.canonicalPath ||
-                            out.path.startsWith(destination.canonicalPath + File.separator)) { "Unsafe path in Linux image" }
-                        val leaf = out.name
-                        if (leaf == ".wh..wh..opq") {
-                            out.parentFile?.listFiles()?.forEach { it.deleteRecursively() }
-                            continue
-                        }
-                        if (leaf.startsWith(".wh.")) {
-                            File(out.parentFile, leaf.removePrefix(".wh.")).deleteRecursively()
-                            continue
-                        }
-                        when {
-                            entry.isDirectory -> out.mkdirs()
-                            entry.isSymbolicLink -> {
-                                out.parentFile?.mkdirs()
-                                if (out.exists() || out.isSymlink()) out.delete()
-                                if (!entry.linkName.contains("\u0000")) {
-                                    val target = if (entry.linkName.startsWith("/")) {
-                                        relativePath(out.parentFile ?: destination, File(destination, entry.linkName.removePrefix("/")))
-                                    } else entry.linkName
-                                    Os.symlink(target, out.absolutePath)
-                                }
+            val buffered = BufferedInputStream(file)
+            buffered.mark(4)
+            val first = buffered.read()
+            val second = buffered.read()
+            buffered.reset()
+            val isGzip = mediaType.contains("gzip", ignoreCase = true) || (first == 0x1f && second == 0x8b)
+            val decoded = if (isGzip) GzipCompressorInputStream(buffered) else buffered
+            TarArchiveInputStream(decoded).use { tar ->
+                while (true) {
+                    val entry = tar.nextTarEntry ?: break
+                    val name = entry.name.replace('\\', '/').trimStart('/')
+                    if (name.isBlank()) continue
+                    val out = File(destination, name).canonicalFile
+                    require(out.path == destination.canonicalPath ||
+                        out.path.startsWith(destination.canonicalPath + File.separator)) { "Unsafe path in Linux image" }
+                    val leaf = out.name
+                    if (leaf == ".wh..wh..opq") {
+                        out.parentFile?.listFiles()?.forEach { it.deleteRecursively() }
+                        continue
+                    }
+                    if (leaf.startsWith(".wh.")) {
+                        File(out.parentFile, leaf.removePrefix(".wh.")).deleteRecursively()
+                        continue
+                    }
+                    when {
+                        entry.isDirectory -> out.mkdirs()
+                        entry.isSymbolicLink -> {
+                            out.parentFile?.mkdirs()
+                            if (out.exists() || out.isSymlink()) out.delete()
+                            if (!entry.linkName.contains("\u0000")) {
+                                val target = if (entry.linkName.startsWith("/")) {
+                                    relativePath(out.parentFile ?: destination, File(destination, entry.linkName.removePrefix("/")))
+                                } else entry.linkName
+                                Os.symlink(target, out.absolutePath)
                             }
-                            entry.isFile -> {
-                                out.parentFile?.mkdirs()
-                                FileOutputStream(out).use { output -> tar.copyTo(output) }
-                                out.setReadable(entry.mode and 0b100100100 != 0, false)
-                                out.setWritable(entry.mode and 0b010010010 != 0, false)
-                                out.setExecutable(entry.mode and 0b001001001 != 0, false)
-                            }
+                        }
+                        entry.isFile -> {
+                            out.parentFile?.mkdirs()
+                            FileOutputStream(out).use { output -> tar.copyTo(output) }
+                            out.setReadable(entry.mode and 0b100100100 != 0, false)
+                            out.setWritable(entry.mode and 0b010010010 != 0, false)
+                            out.setExecutable(entry.mode and 0b001001001 != 0, false)
                         }
                     }
                 }
