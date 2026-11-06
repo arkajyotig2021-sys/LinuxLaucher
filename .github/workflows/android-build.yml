@@ -77,6 +77,21 @@ jobs:
           find build/talloc-2.1.14/third_party/waf/wafadmin -type f -name '*.py' -exec sed -i -E \
             -e 's/from \. import /import /g' \
             -e 's/from \.([A-Za-z_][A-Za-z0-9_]*) import /from \1 import /g' {} +
+          python - <<'PY'
+          from pathlib import Path
+          utils_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Utils.py")
+          utils = utils_path.read_text()
+          if "f = open(fname, m)" not in utils:
+              raise SystemExit("Could not find legacy Waf file-open mode")
+          utils_path.write_text(utils.replace("f = open(fname, m)", "f = open(fname, m.replace('U', ''))", 1))
+          options_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Options.py")
+          options = options_path.read_text()
+          if "default_jobs = int(default_jobs)" not in options:
+              if "if default_jobs < 1:" not in options:
+                  raise SystemExit("Could not find legacy Waf worker-count check")
+              options = options.replace("if default_jobs < 1:", "default_jobs = int(default_jobs)\nif default_jobs < 1:", 1)
+              options_path.write_text(options)
+          PY
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
