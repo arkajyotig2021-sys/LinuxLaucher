@@ -53,6 +53,17 @@ jobs:
             sleep $((attempt * 8))
           done
           cd /tmp/build-proot-android
+          # Use the SDK/NDK location provisioned by setup-android, not the upstream local-machine default.
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("config")
+          s = p.read_text()
+          old = 'NDK="$HOME/Android/Sdk/ndk/23.2.8568313"'
+          new = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
+          if old not in s:
+              raise SystemExit("Expected hardcoded NDK path not found in upstream config")
+          p.write_text(s.replace(old, new, 1))
+          PY
           retry_step() {
             local step="$1"; shift
             for attempt in 1 2 3 4; do
