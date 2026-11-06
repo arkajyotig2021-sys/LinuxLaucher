@@ -2,7 +2,6 @@ package com.mindflux.linuxlauncher.ui
 
 import android.net.Uri
 import android.webkit.WebView
-import android.net.Uri
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,22 +60,39 @@ fun LinuxEnvironmentChooserDialog(distroId:String,onDismiss:()->Unit,onTerminal:
    TextButton(enabled=!backupBusy,onClick={importPicker.launch(arrayOf("application/gzip","application/x-gzip","application/octet-stream"))}){Text("Restore Linux backup")}
   }},
   dismissButton={TextButton(onClick=onDismiss,enabled=!backupBusy){Text("Close")}})
- if (restoreUri != null) {
-  AlertDialog(onDismissRequest={restoreUri=null},title={Text("Replace $distroId?")},
-   text={Text("Restoring this archive will replace the current Linux root filesystem. Make a backup first if you need to keep the current installation.")},
-   confirmButton={TextButton(onClick={
-    val uri=restoreUri!!; restoreUri=null; backupBusy=true; backupError=null; backupStatus="Restoring Linux rootfs…"
-    scope.launch {
-     try {
-      val input=withContext(Dispatchers.IO){context.contentResolver.openInputStream(uri)} ?: error("Could not open the selected backup")
-      LinuxBackupManager.restore(context,distroId,input){progress->scope.launch{backupStatus=progress}}
-      backupStatus="Restore completed successfully."
-     } catch(t:Throwable){backupError=t.message?:"Restore failed."}
-     finally{backupBusy=false}
-    }
-   }){Text("Replace Linux")},
-   dismissButton={TextButton(onClick={restoreUri=null}){Text("Cancel")}})
+ restoreUri?.let { selectedUri ->
+  AlertDialog(
+   onDismissRequest = { restoreUri = null },
+   title = { Text("Replace $distroId?") },
+   text = { Text("Restoring this archive will replace the current Linux root filesystem. Make a backup first if you need to keep the current installation.") },
+   confirmButton = {
+    TextButton(onClick = {
+     restoreUri = null
+     backupBusy = true
+     backupError = null
+     backupStatus = "Restoring Linux rootfs…"
+     scope.launch {
+      try {
+       val input = withContext(Dispatchers.IO) { context.contentResolver.openInputStream(selectedUri) }
+        ?: error("Could not open the selected backup")
+       LinuxBackupManager.restore(context, distroId, input) { progress ->
+        scope.launch { backupStatus = progress }
+       }
+       backupStatus = "Restore completed successfully."
+      } catch (t: Throwable) {
+       backupError = t.message ?: "Restore failed."
+      } finally {
+       backupBusy = false
+      }
+     }
+    }) { Text("Replace Linux") }
+   },
+   dismissButton = {
+    TextButton(onClick = { restoreUri = null }) { Text("Cancel") }
+   }
+  )
  }
+
 }
 
 @Composable
