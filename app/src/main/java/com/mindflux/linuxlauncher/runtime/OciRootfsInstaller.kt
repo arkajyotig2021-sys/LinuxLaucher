@@ -15,7 +15,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-/** OCI/Docker Hub rootfs installer. Linux shares Android's kernel; this is not a VM. */
+/** Registry-aware OCI rootfs installer. Linux shares Android's kernel; this is not a VM. */
+private data class OciImageReference(val registry: String, val repository: String, val tag: String)
+
 class OciRootfsInstaller(private val filesDir: File) {
     data class Progress(val message: String, val downloaded: Long = 0, val total: Long = -1)
 
@@ -31,10 +33,12 @@ class OciRootfsInstaller(private val filesDir: File) {
             if (staging.exists()) staging.deleteRecursively()
             check(staging.mkdirs()) { "Cannot create installation directory" }
             try {
-                val (repo, tag) = parseImage(image)
-                onProgress(Progress("Contacting image registry"))
-                val token = registryToken(repo)
-                val index = requestJson("https://registry-1.docker.io/v2/" + repo + "/manifests/" + tag, token, manifestAccept)
+                val reference = parseImage(image)
+                val repo = reference.repository
+                val registryBase = "https://" + reference.registry + "/v2/"
+                onProgress(Progress("Contacting " + reference.registry))
+                val token = registryToken(reference.registry, repo)
+                val index = requestJson(registryBase + repo + "/manifests/" + reference.tag, token, manifestAccept)
                 val manifests = index.optJSONArray("manifests")
                 val selected = if (manifests == null) index else {
                     val descriptor = (0 until manifests.length()).map { manifests.getJSONObject(it) }
@@ -43,7 +47,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                             p.optString("os") == "linux" && p.optString("architecture") == arch &&
                                 (arch != "arm64" || p.optString("variant").let { v -> v.isBlank() || v == "v8" })
                         } ?: error("No " + arch + " Linux image is available for " + image)
-                    requestJson("https://registry-1.docker.io/v2/" + repo + "/manifests/" + descriptor.getString("digest"), token, manifestAccept)
+                    requestJson(registryBase + repo + "/manifests/" + descriptor.getString("digest"), token, manifestAccept)
                 }
                 val layers = selected.getJSONArray("layers")
                 for (i in 0 until layers.length()) {
@@ -53,7 +57,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                     if (!archive.isFile || sha256(archive) != digest.removePrefix("sha256:")) {
                         archive.delete()
                         onProgress(Progress("Downloading layer " + (i + 1) + "/" + layers.length()))
-                        download("https://registry-1.docker.io/v2/" + repo + "/blobs/" + digest, token, archive) { got, total ->
+                        download(registryBase + repo + "/blobs/" + digest, token, archive) { got, total ->
                             onProgress(Progress("Downloading layer " + (i + 1) + "/" + layers.length(), got, total))
                         }
                         check(sha256(archive) == digest.removePrefix("sha256:")) { "Layer checksum failed" }
@@ -77,14 +81,22 @@ class OciRootfsInstaller(private val filesDir: File) {
             }
         }
 
-    private fun parseImage(image: String): Pair<String, String> {
-        val parts = image.split(':', limit = 2)
-        val name = parts[0]
-        val tag = parts.getOrNull(1) ?: "latest"
-        val repo = if ('/' in name) name else "library/" + name
-        require(repo.matches(Regex("[a-zA-Z0-9._/-]+")) && !repo.contains(".."))
-        require(tag.matches(Regex("[a-zA-Z0-9._-]{1,128}")))
-        return repo to tag
+    private fun parseImage(image: String): OciImageReference {
+        require(image.isNotBlank() && !image.any { it.isWhitespace() }) { "Enter an OCI image reference" }
+        val tagSeparator = image.lastIndexOf(':')
+        val slashSeparator = image.lastIndexOf('/')
+        val tag = if (tagSeparator > slashSeparator) image.substring(tagSeparator + 1) else "latest"
+        val name = if (tagSeparator > slashSeparator) image.substring(0, tagSeparator) else image
+        val firstSlash = name.indexOf('/')
+        val firstPart = if (firstSlash >= 0) name.substring(0, firstSlash) else ""
+        val hasRegistry = firstSlash >= 0 && ('.' in firstPart || ':' in firstPart || firstPart == "localhost")
+        val registry = if (hasRegistry) firstPart else "registry-1.docker.io"
+        val rawRepo = if (hasRegistry) name.substring(firstSlash + 1) else name
+        val repo = if (!hasRegistry && '/' !in rawRepo) "library/" + rawRepo else rawRepo
+        require(registry.matches(Regex("[a-zA-Z0-9.-]+(:[0-9]{1,5})?"))) { "Invalid OCI registry host" }
+        require(repo.matches(Regex("[a-zA-Z0-9._/-]+")) && !repo.contains("..")) { "Invalid OCI repository path" }
+        require(tag.matches(Regex("[a-zA-Z0-9._-]{1,128}"))) { "Invalid OCI image tag" }
+        return OciImageReference(registry, repo, tag)
     }
 
     private fun dockerArch(): String? = when {
@@ -95,15 +107,23 @@ class OciRootfsInstaller(private val filesDir: File) {
         else -> null
     }
 
-    private fun registryToken(repo: String): String {
-        val c = URL("https://registry-1.docker.io/v2/").openConnection() as HttpURLConnection
+    private fun registryToken(registry: String, repo: String): String? {
+        val c = URL("https://" + registry + "/v2/").openConnection() as HttpURLConnection
+        c.connectTimeout = 20000
+        c.readTimeout = 20000
         try {
-            c.connect()
-            val challenge = c.getHeaderField("WWW-Authenticate") ?: error("Registry authentication challenge missing")
+            val status = c.responseCode
+            if (status == 200) return null
+            if (status != 401) error("Registry authentication check failed (HTTP " + status + ")")
+            val challenge = c.getHeaderField("WWW-Authenticate") ?: error("Registry did not provide an authentication challenge")
+            require(challenge.startsWith("Bearer ", ignoreCase = true)) { "This OCI registry uses an unsupported authentication scheme" }
             val realm = Regex("realm=\"([^\"]+)\"").find(challenge)?.groupValues?.get(1) ?: error("Invalid registry challenge")
-            val service = Regex("service=\"([^\"]+)\"").find(challenge)?.groupValues?.get(1) ?: "registry.docker.io"
+            val service = Regex("service=\"([^\"]+)\"").find(challenge)?.groupValues?.get(1)
             val scope = java.net.URLEncoder.encode("repository:" + repo + ":pull", "UTF-8")
-            return requestJson(realm + "?service=" + service + "&scope=" + scope, null, null).getString("token")
+            val separator = if ('?' in realm) "&" else "?"
+            val tokenUrl = realm + separator + (service?.let { "service=" + java.net.URLEncoder.encode(it, "UTF-8") + "&" } ?: "") + "scope=" + scope
+            val json = requestJson(tokenUrl, null, null)
+            return json.optString("token").ifBlank { json.optString("access_token") }.ifBlank { error("Registry did not return a bearer token") }
         } finally { c.disconnect() }
     }
 
@@ -120,11 +140,11 @@ class OciRootfsInstaller(private val filesDir: File) {
         } finally { c.disconnect() }
     }
 
-    private fun download(url: String, token: String, target: File, progress: (Long, Long) -> Unit) {
+    private fun download(url: String, token: String?, target: File, progress: (Long, Long) -> Unit) {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 20000
         c.readTimeout = 60000
-        c.setRequestProperty("Authorization", "Bearer " + token)
+        if (token != null) c.setRequestProperty("Authorization", "Bearer " + token)
         try {
             val status = c.responseCode
             if (status !in 200..299) error("Layer download failed (HTTP " + status + ")")
