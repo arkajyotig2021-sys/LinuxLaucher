@@ -203,13 +203,25 @@ jobs:
           # The bundled talloc Waf version does not recognize this flag.
           sed -i -e 's/--disable-rpath//g' -e 's/--disable-python//g' -e 's/--cross-compile//g' -e 's/--cross-answers=cross-answers.txt//g' make-talloc-static.sh
           cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_configure <<'PY'
+          import os
           def configure(conf):
-              conf.load('compiler_cc')
+              compiler = os.environ.get('CC')
+              if not compiler:
+                  conf.fatal('Android NDK C compiler environment variable CC is missing')
+              conf.env.CC = [compiler]
+              conf.env.CC_NAME = 'gcc'
+              conf.env.COMPILER_CC = 'gcc'
           PY
           cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_build <<'PY'
           def build(bld):
               pass
           PY
+          # Validate the first target compiler and make it available to Waf.
+          . ./config
+          set-arch aarch64
+          echo "Android NDK C compiler: $CC"
+          test -x "$CC"
+          "$CC" --version
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
