@@ -21,7 +21,25 @@ private data class OciImageReference(val registry: String, val repository: Strin
 class OciRootfsInstaller(private val filesDir: File) {
     data class Progress(val message: String, val downloaded: Long = 0, val total: Long = -1)
 
-    suspend fun install(image: String, distroId: String, onProgress: (Progress) -> Unit = {}) =
+    fun hasPartialDownloads(distroId: String): Boolean {
+        require(distroId.matches(Regex("[a-z0-9][a-z0-9._-]{0,39}"))) { "Invalid distro ID" }
+        val cache = File(filesDir, "linux-cache/$distroId")
+        return cache.listFiles()?.any { it.isFile && it.name.endsWith(".part") && it.length() > 0L } == true
+    }
+
+    fun clearPartialDownloads(distroId: String) {
+        require(distroId.matches(Regex("[a-z0-9][a-z0-9._-]{0,39}"))) { "Invalid distro ID" }
+        File(filesDir, "linux-cache/$distroId").listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".part") }
+            ?.forEach { it.delete() }
+    }
+
+    suspend fun install(
+        image: String,
+        distroId: String,
+        resumeInterrupted: Boolean = true,
+        onProgress: (Progress) -> Unit = {}
+    ) =
         withContext(Dispatchers.IO) {
             require(distroId.matches(Regex("[a-z0-9][a-z0-9._-]{0,39}"))) { "Invalid distro ID" }
             val arch = dockerArch() ?: error("Unsupported CPU architecture")
@@ -29,6 +47,7 @@ class OciRootfsInstaller(private val filesDir: File) {
             val base = File(filesDir, "linux-containers").canonicalFile
             require(root.path.startsWith(base.path + File.separator))
             val work = File(filesDir, "linux-cache/" + distroId).apply { mkdirs() }
+            if (!resumeInterrupted) clearPartialDownloads(distroId)
             val staging = File(root.parentFile, "rootfs.installing")
             if (staging.exists()) staging.deleteRecursively()
             check(staging.mkdirs()) { "Cannot create installation directory" }
@@ -144,18 +163,33 @@ class OciRootfsInstaller(private val filesDir: File) {
     }
 
     private fun download(url: String, token: String?, target: File, progress: (Long, Long) -> Unit) {
+        val partial = File(target.parentFile, target.name + ".part")
+        val previousBytes = partial.length()
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 20000
         c.readTimeout = 60000
         if (token != null) c.setRequestProperty("Authorization", "Bearer " + token)
+        if (previousBytes > 0L) c.setRequestProperty("Range", "bytes=" + previousBytes + "-")
         try {
             val status = c.responseCode
-            if (status !in 200..299) error("Layer download failed (HTTP " + status + ")")
-            val total = c.contentLengthLong
+            val append = previousBytes > 0L && status == HttpURLConnection.HTTP_PARTIAL
+            if (status != HttpURLConnection.HTTP_OK && status != HttpURLConnection.HTTP_PARTIAL) {
+                error("Layer download failed (HTTP " + status + ")")
+            }
+            if (status == HttpURLConnection.HTTP_PARTIAL) {
+                require(append) { "Registry returned a partial response without a resume offset" }
+                val range = c.getHeaderField("Content-Range") ?: error("Registry omitted Content-Range for resumed download")
+                require(range.startsWith("bytes " + previousBytes + "-")) { "Registry returned an unexpected byte range" }
+            }
+            if (previousBytes > 0L && !append) partial.delete()
+            val initialBytes = if (append) previousBytes else 0L
+            val contentLength = c.contentLengthLong
+            val total = if (contentLength > 0L) contentLength + initialBytes else -1L
             c.inputStream.use { input ->
-                FileOutputStream(target).use { output ->
+                FileOutputStream(partial, append).use { output ->
                     val buffer = ByteArray(128 * 1024)
-                    var done = 0L
+                    var done = initialBytes
+                    progress(done, total)
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
@@ -167,6 +201,8 @@ class OciRootfsInstaller(private val filesDir: File) {
                     output.fd.sync()
                 }
             }
+            if (target.exists()) target.delete()
+            check(partial.renameTo(target)) { "Could not finalize downloaded OCI layer" }
         } finally { c.disconnect() }
     }
 

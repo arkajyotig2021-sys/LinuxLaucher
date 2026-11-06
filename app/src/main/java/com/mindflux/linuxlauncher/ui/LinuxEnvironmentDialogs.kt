@@ -61,6 +61,29 @@ fun LinuxInstallDialog(
     var message by remember { mutableStateOf(if (complete) "This Linux system is already installed." else "Ready to install.") }
     var error by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0f) }
+    val installer = remember(context) { OciRootfsInstaller(context.filesDir) }
+    var interrupted by remember(distro.id) { mutableStateOf(installer.hasPartialDownloads(distro.id)) }
+    val startInstall: (Boolean) -> Unit = { resume ->
+        running = true
+        error = null
+        scope.launch {
+            try {
+                installer.install(image.trim(), distro.id, resume) { p ->
+                    message = p.message
+                    if (p.total > 0) progress = (p.downloaded.toFloat() / p.total).coerceIn(0f, 1f)
+                }
+                complete = true
+                interrupted = false
+                message = "Installation complete."
+            } catch (t: Throwable) {
+                error = t.message ?: "Installation failed."
+                interrupted = installer.hasPartialDownloads(distro.id)
+                message = "Installation did not complete."
+            } finally {
+                running = false
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = { if (!running) onDismiss() },
@@ -85,6 +108,9 @@ fun LinuxInstallDialog(
                         else -> "Enter a public OCI Linux image reference above. Example: alpine:3.22 or ghcr.io/owner/image:tag."
                     }
                 )
+                if (interrupted && !running) {
+                    Text("An interrupted layer download was saved. Resume it, or restart and discard the partial files.")
+                }
                 if (running) {
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -99,25 +125,16 @@ fun LinuxInstallDialog(
         confirmButton = {
             when {
                 complete -> TextButton(onClick = { onInstalled(distro.id) }) { Text("Open terminal") }
-                image.isNotBlank() && !running -> TextButton(onClick = {
-                    running = true
-                    error = null
-                    scope.launch {
-                        try {
-                            OciRootfsInstaller(context.filesDir).install(image.trim(), distro.id) { p ->
-                                message = p.message
-                                if (p.total > 0) progress = (p.downloaded.toFloat() / p.total).coerceIn(0f, 1f)
-                            }
-                            complete = true
-                            message = "Installation complete."
-                        } catch (t: Throwable) {
-                            error = t.message ?: "Installation failed."
-                            message = "Installation did not complete."
-                        } finally {
-                            running = false
+                image.isNotBlank() && !running -> {
+                    if (interrupted) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { startInstall(true) }) { Text("Resume") }
+                            TextButton(onClick = { startInstall(false) }) { Text("Restart") }
                         }
+                    } else {
+                        TextButton(onClick = { startInstall(true) }) { Text("Install Linux") }
                     }
-                }) { Text("Install Linux") }
+                }
             }
         },
         dismissButton = {
