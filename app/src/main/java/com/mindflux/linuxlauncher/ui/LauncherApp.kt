@@ -59,10 +59,34 @@ fun LauncherApp() {
             containerColor = Background,
             bottomBar = {
                 NavigationBar(containerColor = Color(0xFF111A25), tonalElevation = 0.dp) {
-                    NavItem(tab, Tab.HOME, "Home", Icons.Default.Dashboard, Modifier.weight(1f)) { tab = it }
-                    NavItem(tab, Tab.EXPLORE, "Explore", Icons.Default.GridView, Modifier.weight(1f)) { tab = it }
-                    NavItem(tab, Tab.DEVICE, "My device", Icons.Default.Memory, Modifier.weight(1f)) { tab = it }
-                    NavItem(tab, Tab.SETTINGS, "Settings", Icons.Default.Tune, Modifier.weight(1f)) { tab = it }
+                    NavigationBarItem(
+                        selected = tab == Tab.HOME,
+                        onClick = { tab = Tab.HOME },
+                        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Home") },
+                        label = { Text("Home", maxLines = 1) },
+                        colors = navigationItemColors()
+                    )
+                    NavigationBarItem(
+                        selected = tab == Tab.EXPLORE,
+                        onClick = { tab = Tab.EXPLORE },
+                        icon = { Icon(Icons.Default.GridView, contentDescription = "Explore") },
+                        label = { Text("Explore", maxLines = 1) },
+                        colors = navigationItemColors()
+                    )
+                    NavigationBarItem(
+                        selected = tab == Tab.DEVICE,
+                        onClick = { tab = Tab.DEVICE },
+                        icon = { Icon(Icons.Default.Memory, contentDescription = "My device") },
+                        label = { Text("My device", maxLines = 1) },
+                        colors = navigationItemColors()
+                    )
+                    NavigationBarItem(
+                        selected = tab == Tab.SETTINGS,
+                        onClick = { tab = Tab.SETTINGS },
+                        icon = { Icon(Icons.Default.Tune, contentDescription = "Settings") },
+                        label = { Text("Settings", maxLines = 1) },
+                        colors = navigationItemColors()
+                    )
                 }
             }
         ) { inset ->
@@ -93,28 +117,13 @@ fun LauncherApp() {
 }
 
 @Composable
-private fun NavItem(
-    current: Tab,
-    item: Tab,
-    label: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    choose: (Tab) -> Unit
-) {
-    val isSelected = current == item
-    Column(
-        modifier = modifier
-            .fillMaxHeight()
-            .clickable(role = Role.Tab) { choose(item) }
-            .semantics { selected = isSelected },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(icon, contentDescription = label, tint = if (isSelected) Mint else Muted)
-        Spacer(Modifier.height(3.dp))
-        Text(label, color = if (isSelected) Mint else Muted, fontSize = 9.sp, maxLines = 1)
-    }
-}
+private fun navigationItemColors() = NavigationBarItemDefaults.colors(
+    selectedIconColor = Mint,
+    selectedTextColor = Mint,
+    unselectedIconColor = Muted,
+    unselectedTextColor = Muted,
+    indicatorColor = Color(0xFF203A34)
+)
 
 @Composable
 private fun Home(d: DeviceProfile, explore: () -> Unit, devicePage: () -> Unit, modifier: Modifier = Modifier) {
