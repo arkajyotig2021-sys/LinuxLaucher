@@ -35,7 +35,7 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
  val rootfs= remember(distroId){RuntimeCommandBuilder.rootfsDirectory(context.filesDir,distroId)}
  var installed by remember(rootfs){mutableStateOf(File(rootfs,"usr/bin/startxfce4").exists() && File(rootfs,"usr/bin/vncserver").exists())}
  var working by remember{mutableStateOf(false)}; var ready by remember{mutableStateOf(false)}; var viewer by remember{mutableStateOf(false)}
- var error by remember{mutableStateOf<String?>(null)}; val log= remember{mutableStateListOf<String>()}
+ var errorMessage by remember{mutableStateOf<String?>(null)}; val log= remember{mutableStateListOf<String>()}
  suspend fun execute(command:String):Int {
   val binary=RuntimeBinaryLocator(context).prootExecutable() ?: error("PRoot engine is missing from this APK build.")
   val process=withContext(Dispatchers.IO){LinuxRuntimeSession(binary,rootfs).startCommand(command)}
@@ -66,11 +66,11 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
    Text("$distroId · XFCE desktop",color=Color(0xFF69E6B7),style=MaterialTheme.typography.titleLarge)
    Text("Lightweight desktop streamed locally to this app. It shares Android's kernel and uses your phone's CPU and RAM.",color=Color(0xFFE1E8EF))
    if(working) LinearProgressIndicator(Modifier.fillMaxWidth())
-   error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
+   errorMessage?.let{Text(it,color=MaterialTheme.colorScheme.error)}
    if(log.isNotEmpty()) LazyColumn(Modifier.fillMaxWidth().height(130.dp)){items(log){Text(it,color=Color(0xFFB7C6D6),style=MaterialTheme.typography.bodySmall)}}
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-    Button(enabled=!working&&!installed,onClick={working=true;error=null;log.clear();scope.launch{try{val code=execute(setup);if(code!=0)error="Desktop installation failed (exit $code)." else installed=true}catch(t:Throwable){error=t.message?:"Setup failed."}finally{working=false}}}){Text(if(installed)"Installed" else "Install XFCE")}
-    Button(enabled=installed&&!working,onClick={working=true;error=null;log.clear();scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true}else error="Desktop start failed (exit $code)."}catch(t:Throwable){error=t.message?:"Launch failed."}finally{working=false}}}){Text("Launch desktop")}
+    Button(enabled=!working&&!installed,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(setup);if(code!=0)errorMessage="Desktop installation failed (exit $code)." else installed=true}catch(t:Throwable){errorMessage=t.message?:"Setup failed."}finally{working=false}}}){Text(if(installed)"Installed" else "Install XFCE")}
+    Button(enabled=installed&&!working,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true}else errorMessage="Desktop start failed (exit $code)."}catch(t:Throwable){errorMessage=t.message?:"Launch failed."}finally{working=false}}}){Text("Launch desktop")}
    }
    TextButton(onClick=onDismiss,enabled=!working){Text("Close")}
   }
