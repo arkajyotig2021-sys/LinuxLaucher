@@ -234,6 +234,17 @@ jobs:
           echo "Android NDK C compiler: $CC"
           test -x "$CC"
           "$CC" --version
+          # Ensure the standalone lib/replace script initializes the compiler tool.
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("build/talloc-2.1.14/lib/replace/wscript")
+          s = p.read_text()
+          if "def options(opt):" not in s or "def configure(conf):" not in s:
+              raise SystemExit("Unexpected lib/replace Waf script structure")
+          s = s.replace("def options(opt):", "def options(opt):\n    opt.load(\'compiler_cc\')", 1)
+          s = s.replace("def configure(conf):", "def configure(conf):\n    conf.load(\'compiler_cc\')", 1)
+          p.write_text(s)
+          PY
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
