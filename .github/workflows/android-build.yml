@@ -51,14 +51,14 @@ jobs:
           )
           for arch in aarch64 armv7a x86_64 i686; do
             src="$PWD/build/root-$arch/root-apk/bin"
-            test -s "$src/libproot.so"
+            test -s "$src/libproot-userland.so"
             test -s "$src/libproot-loader.so"
             out="$GITHUB_WORKSPACE/app/src/main/jniLibs/${abi_map[$arch]}"
             mkdir -p "$out"
-            cp "$src/libproot.so" "$out/libproot.so"
+            cp "$src/libproot-userland.so" "$out/libproot.so"
             cp "$src/libproot-loader.so" "$out/libproot-loader.so"
+            if [[ -s "$src/libproot.so" ]]; then cp "$src/libproot.so" "$out/libproot-regular.so"; fi
             if [[ -s "$src/libproot-loader32.so" ]]; then cp "$src/libproot-loader32.so" "$out/libproot-loader32.so"; fi
-            if [[ -s "$src/libproot-userland.so" ]]; then cp "$src/libproot-userland.so" "$out/libproot-userland.so"; fi
             chmod 755 "$out"/*.so
           done
 
