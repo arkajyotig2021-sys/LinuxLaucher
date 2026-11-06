@@ -111,6 +111,21 @@ jobs:
           find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
           python -m lib2to3 -w -n build/talloc-2.1.14/wscript build/talloc-2.1.14/buildtools
           python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
+          # Python 3 rejects mixed indentation in several legacy Samba Waf scripts.
+          # Normalize tabs consistently after conversion, including extensionless wscript files.
+          python - <<'PY'
+          from pathlib import Path
+          root = Path("build/talloc-2.1.14")
+          candidates = [p for p in root.rglob("*") if p.is_file() and (p.suffix == ".py" or p.name == "wscript")]
+          for path in candidates:
+              try:
+                  source = path.read_text()
+              except UnicodeDecodeError:
+                  continue
+              normalized = source.expandtabs(8)
+              if normalized != source:
+                  path.write_text(normalized)
+          PY
           # Waf loads Samba helpers as top-level modules, not as a Python package.
           # lib2to3's import fixer creates package-relative imports that fail in that mode.
           # Restore absolute sibling imports and assert the helper tree is package-independent.
