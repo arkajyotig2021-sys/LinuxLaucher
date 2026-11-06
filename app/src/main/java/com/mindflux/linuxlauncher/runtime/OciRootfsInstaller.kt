@@ -4,6 +4,8 @@ import android.os.Build
 import android.system.Os
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream
 import org.json.JSONObject
@@ -162,7 +164,8 @@ class OciRootfsInstaller(private val filesDir: File) {
         } finally { c.disconnect() }
     }
 
-    private fun download(url: String, token: String?, target: File, progress: (Long, Long) -> Unit) {
+    private suspend fun download(url: String, token: String?, target: File, progress: (Long, Long) -> Unit) {
+        val jobContext = currentCoroutineContext()
         val partial = File(target.parentFile, target.name + ".part")
         val previousBytes = partial.length()
         val c = URL(url).openConnection() as HttpURLConnection
@@ -191,6 +194,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                     var done = initialBytes
                     progress(done, total)
                     while (true) {
+                        jobContext.ensureActive()
                         val count = input.read(buffer)
                         if (count < 0) break
                         if (count == 0) continue
@@ -206,11 +210,13 @@ class OciRootfsInstaller(private val filesDir: File) {
         } finally { c.disconnect() }
     }
 
-    private fun sha256(file: File): String {
+    private suspend fun sha256(file: File): String {
+        val jobContext = currentCoroutineContext()
         val md = MessageDigest.getInstance("SHA-256")
         FileInputStream(file).use { input ->
             val b = ByteArray(128 * 1024)
             while (true) {
+                jobContext.ensureActive()
                 val n = input.read(b)
                 if (n < 0) break
                 md.update(b, 0, n)
@@ -219,7 +225,8 @@ class OciRootfsInstaller(private val filesDir: File) {
         return md.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun extractLayer(archive: File, destination: File, mediaType: String) {
+    private suspend fun extractLayer(archive: File, destination: File, mediaType: String) {
+        val jobContext = currentCoroutineContext()
         require(!mediaType.contains("zstd", ignoreCase = true)) {
             "This OCI image uses zstd-compressed layers; this build currently supports gzip and uncompressed tar layers"
         }
@@ -233,6 +240,7 @@ class OciRootfsInstaller(private val filesDir: File) {
             val decoded = if (isGzip) GzipCompressorInputStream(buffered) else buffered
             TarArchiveInputStream(decoded).use { tar ->
                 while (true) {
+                    jobContext.ensureActive()
                     val entry = tar.nextTarEntry ?: break
                     val name = entry.name.replace('\\', '/').trimStart('/')
                     if (name.isBlank()) continue

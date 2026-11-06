@@ -42,6 +42,8 @@ import com.mindflux.linuxlauncher.runtime.OciRootfsInstaller
 import com.mindflux.linuxlauncher.runtime.RuntimeBinaryLocator
 import com.mindflux.linuxlauncher.runtime.RuntimeCommandBuilder
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,10 +65,13 @@ fun LinuxInstallDialog(
     var progress by remember { mutableStateOf(0f) }
     val installer = remember(context) { OciRootfsInstaller(context.filesDir) }
     var interrupted by remember(distro.id) { mutableStateOf(installer.hasPartialDownloads(distro.id)) }
+    var installJob by remember { mutableStateOf<Job?>(null) }
+    var discardPartialOnStop by remember { mutableStateOf(false) }
     val startInstall: (Boolean) -> Unit = { resume ->
         running = true
         error = null
-        scope.launch {
+        discardPartialOnStop = false
+        installJob = scope.launch {
             try {
                 installer.install(image.trim(), distro.id, resume) { p ->
                     message = p.message
@@ -75,12 +80,17 @@ fun LinuxInstallDialog(
                 complete = true
                 interrupted = false
                 message = "Installation complete."
+            } catch (cancelled: CancellationException) {
+                error = null
+                message = if (discardPartialOnStop) "Cancelled. Partial downloads removed." else "Paused. Your downloaded data is saved; choose Resume to continue."
             } catch (t: Throwable) {
                 error = t.message ?: "Installation failed."
-                interrupted = installer.hasPartialDownloads(distro.id)
                 message = "Installation did not complete."
             } finally {
+                if (discardPartialOnStop) installer.clearPartialDownloads(distro.id)
+                interrupted = installer.hasPartialDownloads(distro.id)
                 running = false
+                installJob = null
             }
         }
     }
@@ -125,6 +135,10 @@ fun LinuxInstallDialog(
         confirmButton = {
             when {
                 complete -> TextButton(onClick = { onInstalled(distro.id) }) { Text("Open terminal") }
+                running -> Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = { discardPartialOnStop = false; installJob?.cancel() }) { Text("Pause") }
+                    TextButton(onClick = { discardPartialOnStop = true; installJob?.cancel() }) { Text("Cancel") }
+                }
                 image.isNotBlank() && !running -> {
                     if (interrupted) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
