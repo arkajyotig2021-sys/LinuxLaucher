@@ -185,8 +185,11 @@ class OciRootfsInstaller(private val filesDir: File) {
                             entry.isSymbolicLink -> {
                                 out.parentFile?.mkdirs()
                                 if (out.exists() || out.isSymlink()) out.delete()
-                                if (!entry.linkName.startsWith("/") && !entry.linkName.contains("\u0000")) {
-                                    Os.symlink(entry.linkName, out.absolutePath)
+                                if (!entry.linkName.contains("\u0000")) {
+                                    val target = if (entry.linkName.startsWith("/")) {
+                                        relativePath(out.parentFile ?: destination, File(destination, entry.linkName.removePrefix("/")))
+                                    } else entry.linkName
+                                    Os.symlink(target, out.absolutePath)
                                 }
                             }
                             entry.isFile -> {
@@ -201,6 +204,17 @@ class OciRootfsInstaller(private val filesDir: File) {
                 }
             }
         }
+    }
+
+    private fun relativePath(from: File, to: File): String {
+        val a = from.canonicalPath.split(File.separatorChar).filter { it.isNotEmpty() }
+        val b = to.canonicalPath.split(File.separatorChar).filter { it.isNotEmpty() }
+        var common = 0
+        while (common < a.size && common < b.size && a[common] == b[common]) common++
+        val parts = ArrayList<String>()
+        repeat(a.size - common) { parts.add("..") }
+        parts.addAll(b.drop(common))
+        return if (parts.isEmpty()) "." else parts.joinToString("/")
     }
 
     private fun File.isSymlink(): Boolean = try { Os.readlink(absolutePath); true } catch (_: Exception) { false }
