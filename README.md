@@ -1,67 +1,53 @@
-# Linux Launcher — Phase 1 Foundation
+# Linux Launcher
 
-This is the first Android source-code milestone for the Linux Launcher project.
+Linux Launcher is an Android app for installing and running compatible Linux userspaces without root. It uses PRoot and the Android device's existing Linux kernel; it is **not** a virtual machine and does not boot a separate kernel.
 
-## What is implemented
+## Current app features
 
-- Native Android application using Kotlin and Jetpack Compose.
-- Dashboard with the target device profile.
-- Searchable starter Linux distribution catalogue.
-- Distribution detail dialog with explicit runtime status disclosure.
-- Four-section navigation foundation for Home, Explore, My device and Settings.
-- Light/dark theme following Android system appearance.
-- Unit tests for distro catalogue search.
-- GitHub Actions workflow for unit tests and debug APK generation.
+- Four main sections: Home, Explore, My device and Settings.
+- Searchable catalogue of Linux distributions, plus an editable OCI image reference for public images from Docker Hub and other OCI registries.
+- Architecture-aware OCI manifest selection for ARM64, ARM32, x86_64 and x86 devices.
+- Layer SHA-256 verification, guarded extraction, gzip and uncompressed tar support, and saved partial downloads.
+- Download controls: pause while preserving partial data, resume, restart, and cancel while discarding partial data.
+- Rootless PRoot terminal for compatible Linux root filesystems. Commands run inside the selected Linux userspace.
+- Environment chooser after installation: terminal or an XFCE desktop setup.
+- XFCE desktop setup with TigerVNC and a local noVNC viewer for Debian/Ubuntu images using apt.
+- Device dashboard with physical RAM, app CPU-time and Android thermal information where available.
+- Android 7.0 / API 24 minimum target; native runtime build includes ARM and x86 ABIs.
 
-## What is NOT implemented yet
+## Install a Linux image
 
-This milestone does **not** install or boot Linux. It does not contain rootfs downloads,
-PRoot, a VM, desktop streaming, package-manager integration, GPU acceleration,
-hardware bridges, backup/restore, or a real download manager. The UI explicitly
-labels these sections as future runtime work rather than pretending they function.
+1. Open **Explore** and choose a catalogue entry, or choose an entry as a starting point for a custom OCI image.
+2. Open **Install / Open**.
+3. Enter a public image reference, for example `alpine:3.22`, `ubuntu:24.04`, or `ghcr.io/owner/image:tag`.
+4. Tap **Install Linux**. If a transfer is interrupted, choose **Resume** or **Restart**. While downloading, **Pause** preserves partial layer files and **Cancel** removes them.
+5. After installation, choose **Open terminal** or **Install / open XFCE desktop**.
 
-## Device target
+The app needs network access to download images and packages. Large root filesystems and desktop environments can use several gigabytes of storage. Keep the phone connected to power and Wi-Fi for large installs.
 
-Designed as a lightweight starting point for practical Android phones and tablets.
-The current UI target is Android 7.0 (API 24) and newer, with architecture and
-Linux distribution compatibility checked separately. The app does not reserve
-or consume the full device RAM.
+## Compatibility and limitations
 
-## Build
+- A public OCI reference is not a guarantee that every image will run. The image must publish a matching Linux architecture and contain a compatible shell/runtime layout. Some OCI registries or image formats may not be supported.
+- OCI gzip and uncompressed tar layers are supported by the current extractor. Zstandard-compressed layers are rejected with an explicit error rather than silently mis-extracted.
+- The generic terminal is intended for compatible OCI Linux userspaces. One-click XFCE setup is currently limited to Debian/Ubuntu apt-based images; other distributions can still be used through their own package manager in the terminal, but their graphical setup is not automated yet.
+- PRoot shares the Android kernel. Kernel-dependent features, systemd as PID 1, privileged containers, hardware drivers, and some low-level networking or mount operations may not work.
+- The current desktop path is CPU-rendered VNC/noVNC. It does not provide native GPU acceleration and can be demanding on low-memory phones. On a 4 GB RAM device, prefer a minimal rootfs and XFCE over a heavier desktop.
+- Rootfs files are stored in app-private storage. External removable-storage execution, full backup/restore, distro auto-update scheduling, and a complete package-manager UI are not currently implemented.
+- This project has not yet been validated on every physical Android device. Emulator CI cannot replace testing on the target phone.
 
-Requirements:
-- JDK 17
-- Gradle 8.13
-- Android SDK platform 36 and build tools 36.0.0
+## Build from source
 
-From the project root:
+Requirements: JDK 17, Gradle 8.13, Android SDK platform 36, build tools 36.0.0, and Android NDK 23.2.8568313.
 
 ```bash
-gradle testDebugUnitTest
-gradle assembleDebug
+gradle --no-daemon :app:testDebugUnitTest
+gradle --no-daemon :app:assembleDebug
 ```
 
-The debug APK is generated at:
-
-`app/build/outputs/apk/debug/app-debug.apk`
-
-## GitHub Actions cloud build
-
-1. Create a GitHub repository.
-2. Upload this project folder's contents to the repository root.
-3. Open the Actions tab.
-4. Run **Android APK build** using **Run workflow**.
-5. Download the `LinuxLauncher-debug-apk` artifact after the workflow succeeds.
-
-## Version choices
-
-The project uses Android Gradle Plugin 8.13.2, Gradle 8.13, Kotlin 2.2.21,
-and Compose BOM 2025.10.01. Verify compatibility against current Android
-tooling before upgrading these versions.
+The debug APK is generated at `app/build/outputs/apk/debug/app-debug.apk` after the build workflow completes. The GitHub Actions workflow builds the APK-compatible PRoot runtime for ARM and x86 ABIs, runs unit tests and emulator UI tests, assembles the APK, and uploads it as a workflow artifact.
 
 ## Project identity
 
 - Application ID: `com.mindflux.linuxlauncher`
-- Version: `0.1.0`
 - Minimum Android API: 24
 - Target Android API: 35
