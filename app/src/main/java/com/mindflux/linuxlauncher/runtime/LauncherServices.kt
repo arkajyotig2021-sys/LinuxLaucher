@@ -163,7 +163,7 @@ object LinuxExternalFiles {
         return shared
     }
     fun files(context: Context, distroId: String): List<File> = sharedDirectory(context, distroId).listFiles()?.filter { it.isFile }?.sortedBy { it.name } ?: emptyList()
-    fun import(context: Context, distroId: String, uri: Uri): File {
+    fun importFile(context: Context, distroId: String, uri: Uri): File {
         val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
             ?.replace(Regex("[^A-Za-z0-9._-]"), "_")?.take(100)?.takeIf { it.isNotBlank() } ?: "imported-file"
         val target = File(sharedDirectory(context, distroId), name).canonicalFile

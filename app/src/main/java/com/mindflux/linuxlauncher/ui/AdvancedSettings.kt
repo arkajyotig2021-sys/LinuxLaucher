@@ -77,7 +77,7 @@ internal fun AdvancedSettingsScreen(onOpenDistro: (String) -> Unit, modifier: Mo
         if (uri != null && id.isNotBlank()) scope.launch {
             status = "Copying file into Linux…"
             try {
-                val file = withContext(Dispatchers.IO) { LinuxExternalFiles.import(context, id, uri) }
+                val file = withContext(Dispatchers.IO) { LinuxExternalFiles.importFile(context, id, uri) }
                 status = "Imported ${file.name} into /root/shared"
                 sharedFiles = withContext(Dispatchers.IO) { LinuxExternalFiles.files(context, id) }
             } catch (t: Throwable) { status = "Import failed: ${t.message ?: "unknown error"}"; LauncherErrorHistory.record(context, "External file import", status) }
