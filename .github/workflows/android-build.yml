@@ -150,7 +150,7 @@ jobs:
           task_source = task_path.read_text()
           if "exec(c, dc)" not in task_source:
               raise SystemExit("Could not find Waf generated-task exec boundary")
-          task_path.write_text(task_source.replace("exec(c, dc)", "exec(c.replace(chr(9), '    '), dc)", 1))
+          task_path.write_text(task_source.replace("exec(c, dc)", "exec(c.expandtabs(8), dc)", 1))
           PY
           # Waf loads Samba helpers as top-level modules, not as a Python package.
           # lib2to3's import fixer creates package-relative imports that fail in that mode.
