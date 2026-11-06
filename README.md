@@ -13,7 +13,12 @@ Linux Launcher is an Android app for installing and running compatible Linux use
 - Rootless PRoot terminal for compatible Linux root filesystems. Commands run inside the selected Linux userspace.
 - Environment chooser after installation: terminal or an XFCE desktop setup.
 - XFCE desktop setup with TigerVNC and a local noVNC viewer for Debian/Ubuntu images using apt.
-- Device dashboard with physical RAM, app CPU-time and Android thermal information where available.
+- Live device dashboard with physical RAM, best-effort whole-device CPU sampling from `/proc/stat`, app-process CPU time, Android thermal status, and an estimated resource-headroom indicator. The estimate is not a frame-time benchmark.
+- Smooth, Balanced and Battery Saver runtime modes. Adaptive policy lowers the Linux launch-thread priority and reduces XFCE desktop resolution when RAM is low or thermal status rises; Android still controls actual scheduling and thermal limits.
+- Android notifications for download/install progress, completion, errors and user-triggered apt update checks. Android 13+ notification permission is requested at first launch.
+- Persistent error history, copied diagnostic reports, app-crash logging, and a recovery prompt that reopens a new shell in the last active distro. Exact in-memory process state cannot be restored after a crash.
+- Independent installed-distro list with open/remove actions and per-distro apt update checks.
+- SAF-based file import/export between Android storage and each distro's `/root/shared` directory.
 - Android 7.0 / API 24 minimum target; native runtime build includes ARM and x86 ABIs.
 
 ## Install a Linux image
@@ -33,7 +38,7 @@ The app needs network access to download images and packages. Large root filesys
 - The generic terminal is intended for compatible OCI Linux userspaces. One-click XFCE setup is currently limited to Debian/Ubuntu apt-based images; other distributions can still be used through their own package manager in the terminal, but their graphical setup is not automated yet.
 - PRoot shares the Android kernel. Kernel-dependent features, systemd as PID 1, privileged containers, hardware drivers, and some low-level networking or mount operations may not work.
 - The current desktop path is CPU-rendered VNC/noVNC. It does not provide native GPU acceleration and can be demanding on low-memory phones. On a 4 GB RAM device, prefer a minimal rootfs and XFCE over a heavier desktop.
-- Rootfs files are stored in app-private storage. Backups cover the full root filesystem; selective backup, external removable-storage execution, distro auto-update scheduling, and a complete package-manager UI are not currently implemented.
+- Rootfs files remain in app-private storage. Android Storage Access Framework is used to copy individual files into/out of `/root/shared`; external shared storage is not directly mounted or executed because Android may enforce no-exec and scoped-storage restrictions. Selective rootfs backup and automatic scheduled updates are not implemented. Update checks currently support apt-based Debian/Ubuntu images; applying package upgrades remains a user-controlled terminal action.
 - This project has not yet been validated on every physical Android device. Emulator CI cannot replace testing on the target phone.
 
 ## Build from source

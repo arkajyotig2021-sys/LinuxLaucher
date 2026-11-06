@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mindflux.linuxlauncher.data.Distro
 import com.mindflux.linuxlauncher.data.DistroCatalog
+import com.mindflux.linuxlauncher.runtime.LauncherSessionRecovery
 import java.util.Locale
 
 private enum class Tab { HOME, EXPLORE, DEVICE, SETTINGS }
@@ -54,6 +55,7 @@ fun LauncherApp() {
     var terminalDistro by remember { mutableStateOf<String?>(null) }
     var environmentDistro by remember { mutableStateOf<String?>(null) }
     var desktopDistro by remember { mutableStateOf<String?>(null) }
+    var recoveryDistro by remember(context) { mutableStateOf(LauncherSessionRecovery.pending(context)) }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mint, secondary = Lilac, background = Background,
@@ -105,7 +107,7 @@ fun LauncherApp() {
                     Tab.HOME -> Home(device, { tab = Tab.EXPLORE }, { tab = Tab.DEVICE }, Modifier.fillMaxSize())
                     Tab.EXPLORE -> Explore(query, { query = it }, { selected = it }, Modifier.fillMaxSize())
                     Tab.DEVICE -> DeviceDetails(device, Modifier.fillMaxSize())
-                    Tab.SETTINGS -> Settings(Modifier.fillMaxSize())
+                    Tab.SETTINGS -> AdvancedSettingsScreen(onOpenDistro = { environmentDistro = it }, modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -144,6 +146,15 @@ fun LauncherApp() {
     }
     terminalDistro?.let { id -> LinuxTerminalDialog(id, onDismiss = { terminalDistro = null }) }
     desktopDistro?.let { id -> LinuxDesktopDialog(id, onDismiss = { desktopDistro = null }) }
+    recoveryDistro?.let { id ->
+        AlertDialog(
+            onDismissRequest = { LauncherSessionRecovery.clear(context); recoveryDistro = null },
+            title = { Text("Previous Linux session found") },
+            text = { Text("Linux Launcher did not close its last session normally. Restore opens a new shell in $id. Android cannot restore the exact memory state of a process that has already stopped.") },
+            confirmButton = { TextButton(onClick = { LauncherSessionRecovery.clear(context); recoveryDistro = null; terminalDistro = id }) { Text("Restore Linux session") } },
+            dismissButton = { TextButton(onClick = { LauncherSessionRecovery.clear(context); recoveryDistro = null }) { Text("Start fresh") } }
+        )
+    }
 }
 
 @Composable

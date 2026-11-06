@@ -41,6 +41,10 @@ import com.mindflux.linuxlauncher.runtime.LinuxRuntimeSession
 import com.mindflux.linuxlauncher.runtime.OciRootfsInstaller
 import com.mindflux.linuxlauncher.runtime.RuntimeBinaryLocator
 import com.mindflux.linuxlauncher.runtime.RuntimeCommandBuilder
+import com.mindflux.linuxlauncher.runtime.LauncherNotifications
+import com.mindflux.linuxlauncher.runtime.LauncherErrorHistory
+import com.mindflux.linuxlauncher.runtime.LauncherSessionRecovery
+import com.mindflux.linuxlauncher.runtime.PerformancePolicy
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -75,17 +79,21 @@ fun LinuxInstallDialog(
             try {
                 installer.install(image.trim(), distro.id, resume) { p ->
                     message = p.message
+                    LauncherNotifications.progress(context, "Installing $image", p.message, p.downloaded, p.total)
                     if (p.total > 0) progress = (p.downloaded.toFloat() / p.total).coerceIn(0f, 1f)
                 }
                 complete = true
                 interrupted = false
                 message = "Installation complete."
+                LauncherNotifications.finished(context, "Linux installed", "$image is ready to open.")
             } catch (cancelled: CancellationException) {
                 error = null
                 message = if (discardPartialOnStop) "Cancelled. Partial downloads removed." else "Paused. Your downloaded data is saved; choose Resume to continue."
             } catch (t: Throwable) {
                 error = t.message ?: "Installation failed."
                 message = "Installation did not complete."
+                LauncherErrorHistory.record(context, "Linux installation", t.stackTraceToString())
+                LauncherNotifications.error(context, "Linux installation failed", error ?: "Unknown installation error")
             } finally {
                 if (discardPartialOnStop) installer.clearPartialDownloads(distro.id)
                 interrupted = installer.hasPartialDownloads(distro.id)
@@ -170,7 +178,9 @@ fun LinuxTerminalDialog(distroId: String, onDismiss: () -> Unit) {
             val binary = RuntimeBinaryLocator(context).prootExecutable()
                 ?: error("The PRoot engine is not included in this build.")
             val root = RuntimeCommandBuilder.rootfsDirectory(context.filesDir, distroId)
-            val p = withContext(Dispatchers.IO) { LinuxRuntimeSession(binary, root).startShell() }
+            val policy = PerformancePolicy.resolve(context)
+            LauncherSessionRecovery.markActive(context, distroId)
+            val p = withContext(Dispatchers.IO) { LinuxRuntimeSession(binary, root, policy.threadPriority).startShell() }
             process = p
             ready = true
             output.add("Linux shell started. Try: uname -a")
@@ -181,13 +191,17 @@ fun LinuxTerminalDialog(distroId: String, onDismiss: () -> Unit) {
                     withContext(Dispatchers.Main) { output.add(line) }
                 }
             }
+            LauncherSessionRecovery.clear(context)
         } catch (t: Throwable) {
+            LauncherSessionRecovery.clear(context)
+            LauncherErrorHistory.record(context, "Linux session launch", t.stackTraceToString())
+            LauncherNotifications.error(context, "Linux session failed", t.message ?: "Unknown launch error")
             output.add("Launch error: " + (t.message ?: "Unknown error"))
         }
     }
 
     DisposableEffect(Unit) {
-        onDispose { process?.destroy() }
+        onDispose { process?.destroy(); LauncherSessionRecovery.clear(context) }
     }
 
     Dialog(onDismissRequest = onDismiss) {

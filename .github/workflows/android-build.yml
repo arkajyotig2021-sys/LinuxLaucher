@@ -109,6 +109,7 @@ jobs:
           retry_download "Download PRoot sources" "build/proot-0.15_release" ./get-proot.sh
           echo "Converting bundled Waf/talloc Python 2 source to Python 3"
           find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
+          python -m lib2to3 -w -n build/talloc-2.1.14/wscript build/talloc-2.1.14/buildtools
           python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
           find build/talloc-2.1.14/third_party/waf/wafadmin -type f -name '*.py' -exec sed -i -E \
             -e 's/from \. import /import /g' \

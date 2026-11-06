@@ -20,6 +20,9 @@ import com.mindflux.linuxlauncher.runtime.LinuxBackupManager
 import com.mindflux.linuxlauncher.runtime.LinuxRuntimeSession
 import com.mindflux.linuxlauncher.runtime.RuntimeBinaryLocator
 import com.mindflux.linuxlauncher.runtime.RuntimeCommandBuilder
+import com.mindflux.linuxlauncher.runtime.PerformancePolicy
+import com.mindflux.linuxlauncher.runtime.LauncherNotifications
+import com.mindflux.linuxlauncher.runtime.LauncherErrorHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,7 +107,7 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
  var errorMessage by remember{mutableStateOf<String?>(null)}; val log= remember{mutableStateListOf<String>()}
  suspend fun execute(command:String):Int {
   val binary=RuntimeBinaryLocator(context).prootExecutable() ?: error("PRoot engine is missing from this APK build.")
-  val process=withContext(Dispatchers.IO){LinuxRuntimeSession(binary,rootfs).startCommand(command)}
+  val process=withContext(Dispatchers.IO){LinuxRuntimeSession(binary,rootfs,PerformancePolicy.resolve(context).threadPriority).startCommand(command)}
   return withContext(Dispatchers.IO){val reader=process.inputStream.bufferedReader(); while(true){val line=reader.readLine()?:break; withContext(Dispatchers.Main){if(log.size>200)log.removeAt(0);log.add(line)}};process.waitFor()}
  }
  val setup="""
@@ -121,7 +124,7 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
  val start="""
   set -e
   vncserver -kill :1 >/dev/null 2>&1 || true
-  nohup vncserver :1 -localhost yes -geometry 1280x720 -depth 24 -SecurityTypes None >/tmp/linux-vnc.log 2>&1 </dev/null &
+  nohup vncserver :1 -localhost yes -geometry ${PerformancePolicy.resolve(context).desktopGeometry} -depth 24 -SecurityTypes None >/tmp/linux-vnc.log 2>&1 </dev/null &
   sleep 2
   nohup websockify --web=/usr/share/novnc 127.0.0.1:6080 127.0.0.1:5901 >/tmp/linux-websockify.log 2>&1 </dev/null &
   sleep 2
@@ -135,8 +138,8 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
    errorMessage?.let{Text(it,color=MaterialTheme.colorScheme.error)}
    if(log.isNotEmpty()) LazyColumn(Modifier.fillMaxWidth().height(130.dp)){items(log){Text(it,color=Color(0xFFB7C6D6),style=MaterialTheme.typography.bodySmall)}}
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-    Button(enabled=!working&&!installed,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(setup);if(code!=0)errorMessage="Desktop installation failed (exit $code)." else installed=true}catch(t:Throwable){errorMessage=t.message?:"Setup failed."}finally{working=false}}}){Text(if(installed)"Installed" else "Install XFCE")}
-    Button(enabled=installed&&!working,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true}else errorMessage="Desktop start failed (exit $code)."}catch(t:Throwable){errorMessage=t.message?:"Launch failed."}finally{working=false}}}){Text("Launch desktop")}
+    Button(enabled=!working&&!installed,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(setup);if(code!=0){errorMessage="Desktop installation failed (exit $code).";LauncherErrorHistory.record(context,"Desktop installation","Exit $code\n"+log.joinToString("\n"));LauncherNotifications.error(context,"Desktop installation failed",errorMessage?:"Exit $code")}else { installed=true; LauncherNotifications.finished(context,"XFCE installed","$distroId desktop is ready.") }}catch(t:Throwable){errorMessage=t.message?:"Setup failed.";LauncherErrorHistory.record(context,"Desktop setup",t.stackTraceToString());LauncherNotifications.error(context,"Desktop setup failed",errorMessage?:"Unknown error")}finally{working=false}}}){Text(if(installed)"Installed" else "Install XFCE")}
+    Button(enabled=installed&&!working,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true;LauncherNotifications.finished(context,"Linux desktop started","$distroId XFCE is running.")}else {errorMessage="Desktop start failed (exit $code).";LauncherErrorHistory.record(context,"Desktop launch","Exit $code\n"+log.joinToString("\n"));LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Exit $code")}}catch(t:Throwable){errorMessage=t.message?:"Launch failed.";LauncherErrorHistory.record(context,"Desktop launch",t.stackTraceToString());LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Unknown error")}finally{working=false}}}){Text("Launch desktop")}
    }
    TextButton(onClick=onDismiss,enabled=!working){Text("Close")}
   }

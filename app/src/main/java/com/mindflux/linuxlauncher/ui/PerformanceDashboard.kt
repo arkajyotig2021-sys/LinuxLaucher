@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,44 +30,45 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mindflux.linuxlauncher.runtime.LauncherPreferences
+import com.mindflux.linuxlauncher.runtime.PerformancePolicy
 import kotlinx.coroutines.delay
+import java.io.File
 import java.util.Locale
 
-private data class PerformanceSnapshot(
-    val totalRam: Long,
-    val availableRam: Long,
-    val appCpuPercent: Float?,
-    val thermal: String,
-    val sampledAt: Long
-)
+private data class PerformanceSnapshot(val totalRam: Long, val availableRam: Long, val appCpu: Float?, val systemCpu: Float?, val thermal: String, val headroom: String, val mode: String, val adaptation: String)
+private data class CpuCounters(val total: Long, val idle: Long)
 
 @Composable
 internal fun PerformanceDashboard() {
     val context = LocalContext.current
-    var snapshot by remember { mutableStateOf(readPerformanceSnapshot(context, null, null)) }
-    var previousCpu by remember { mutableStateOf(Process.getElapsedCpuTime()) }
+    var snapshot by remember { mutableStateOf(readSnapshot(context, null, null)) }
+    var previousAppCpu by remember { mutableStateOf(Process.getElapsedCpuTime()) }
     var previousWall by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    var previousSystem by remember { mutableStateOf(readCpuCounters()) }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(2_000)
-            val cpuNow = Process.getElapsedCpuTime()
+            val appNow = Process.getElapsedCpuTime()
             val wallNow = SystemClock.elapsedRealtime()
             val wallDelta = (wallNow - previousWall).coerceAtLeast(1L)
-            val cpuDelta = (cpuNow - previousCpu).coerceAtLeast(0L)
-            val cpu = (cpuDelta.toFloat() / wallDelta.toFloat() * 100f).coerceIn(0f, 100f)
-            snapshot = readPerformanceSnapshot(context, cpu, wallNow)
-            previousCpu = cpuNow
+            val appDelta = (appNow - previousAppCpu).coerceAtLeast(0L)
+            val appCpu = (appDelta.toFloat() / wallDelta.toFloat() * 100f).coerceIn(0f, 100f)
+            val systemNow = readCpuCounters()
+            val systemCpu = if (systemNow != null && previousSystem != null) {
+                val total = (systemNow.total - previousSystem!!.total).coerceAtLeast(1L)
+                val idle = (systemNow.idle - previousSystem!!.idle).coerceAtLeast(0L)
+                ((total - idle).toFloat() / total.toFloat() * 100f).coerceIn(0f, 100f)
+            } else null
+            snapshot = readSnapshot(context, appCpu, systemCpu)
+            previousAppCpu = appNow
             previousWall = wallNow
+            previousSystem = systemNow
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFF141D29),
-        shape = RoundedCornerShape(20.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF293747))
-    ) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFF141D29), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF293747))) {
         Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("LIVE PERFORMANCE", color = Color(0xFF69E6B7), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
@@ -82,10 +82,16 @@ internal fun PerformanceDashboard() {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Metric("Available RAM", formatRam(snapshot.availableRam))
-                Metric("App CPU", snapshot.appCpuPercent?.let { String.format(Locale.getDefault(), "%.0f%%", it) } ?: "Sampling…")
-                Metric("Thermal", snapshot.thermal)
+                Metric("System CPU", snapshot.systemCpu?.let { "${it.toInt()}%" } ?: "Unavailable")
+                Metric("App CPU", snapshot.appCpu?.let { "${it.toInt()}%" } ?: "Sampling…")
             }
-            Text("CPU is this app process only. Thermal data depends on Android version and device support. This panel monitors the phone; it does not change CPU/GPU clocks.", color = Color(0xFF8290A0), fontSize = 9.sp, lineHeight = 13.sp)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Metric("Thermal", snapshot.thermal)
+                Metric("Headroom", snapshot.headroom)
+                Metric("Effective mode", snapshot.mode)
+            }
+            Text(snapshot.adaptation, color = Color(0xFF69E6B7), fontSize = 9.sp)
+            Text("System CPU is sampled from /proc/stat when Android permits access; app CPU is this app process only. Headroom estimates responsiveness from memory and thermal state, not measured frame latency. Android may restrict telemetry and scheduling.", color = Color(0xFF8290A0), fontSize = 9.sp, lineHeight = 13.sp)
         }
     }
 }
@@ -98,25 +104,21 @@ private fun Metric(label: String, value: String) {
     }
 }
 
-private fun readPerformanceSnapshot(context: Context, cpu: Float?, sampledAt: Long?): PerformanceSnapshot {
+private fun readSnapshot(context: Context, appCpu: Float?, systemCpu: Float?): PerformanceSnapshot {
     val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val memory = ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
-    val thermal = if (Build.VERSION.SDK_INT >= 29) {
-        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-        thermalLabel(power.currentThermalStatus)
-    } else "Unavailable"
-    return PerformanceSnapshot(memory.totalMem, memory.availMem, cpu, thermal, sampledAt ?: SystemClock.elapsedRealtime())
+    val thermalCode = if (Build.VERSION.SDK_INT >= 29) (context.getSystemService(Context.POWER_SERVICE) as PowerManager).currentThermalStatus else -1
+    val thermal = when (thermalCode) { 0 -> "Normal"; 1 -> "Light"; 2 -> "Moderate"; 3 -> "Severe"; 4 -> "Critical"; 5 -> "Emergency"; 6 -> "Shutdown"; else -> "Unavailable" }
+    val policy = PerformancePolicy.resolve(context)
+    val headroom = when { thermalCode >= 3 || memory.availMem < 350L * 1024L * 1024L -> "Constrained"; thermalCode >= 2 || memory.availMem < 700L * 1024L * 1024L -> "Reduced"; else -> "Good" }
+    val adaptive = if (LauncherPreferences.adaptive(context)) "Automatic adaptation ON · ${policy.reason}" else "Automatic adaptation OFF"
+    return PerformanceSnapshot(memory.totalMem, memory.availMem, appCpu, systemCpu, thermal, headroom, policy.mode.label, adaptive)
 }
 
-private fun thermalLabel(status: Int): String = when (status) {
-    0 -> "Normal"
-    1 -> "Light"
-    2 -> "Moderate"
-    3 -> "Severe"
-    4 -> "Critical"
-    5 -> "Emergency"
-    6 -> "Shutdown"
-    else -> "Unknown"
-}
+private fun readCpuCounters(): CpuCounters? = runCatching {
+    val parts = File("/proc/stat").useLines { lines -> lines.first().trim().split(Regex("\\s+")) }
+    val values = parts.drop(1).map { it.toLong() }
+    CpuCounters(values.sum(), values.getOrElse(3) { 0L } + values.getOrElse(4) { 0L })
+}.getOrNull()
 
 private fun formatRam(bytes: Long): String = String.format(Locale.getDefault(), "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
