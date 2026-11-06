@@ -198,7 +198,7 @@ jobs:
           # its bundled lib/replace Waf script probes it unconditionally.
           cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_set_options <<'PY'
           def set_options(opt):
-              pass
+              opt.load('compiler_cc')
           PY
           # The bundled talloc Waf version does not recognize this flag.
           sed -i -e 's/--disable-rpath//g' -e 's/--disable-python//g' -e 's/--cross-compile//g' -e 's/--cross-answers=cross-answers.txt//g' make-talloc-static.sh
