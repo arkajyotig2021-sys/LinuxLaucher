@@ -138,7 +138,7 @@ jobs:
           cc_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Tools/cc.py")
           cc_source = cc_path.read_text()
           needle = "cls = Task.simple_task_type('cc', cc_str,"
-          replacement = "cc_str = cc_str.expandtabs(8)\n" + needle
+          replacement = "cc_str = cc_str.replace(chr(9), '    ')\n" + needle
           if needle not in cc_source:
               raise SystemExit("Could not find Waf C compiler task template")
           cc_path.write_text(cc_source.replace(needle, replacement, 1))
