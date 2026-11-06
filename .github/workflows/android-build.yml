@@ -228,6 +228,17 @@ jobs:
           echo "Android NDK C compiler: $CC"
           test -x "$CC"
           "$CC" --version
+          # lib/replace has a configure hook but no options hook; initialize its C compiler there.
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("build/talloc-2.1.14/lib/replace/wscript")
+          s = p.read_text()
+          marker = "def configure(conf):"
+          if marker not in s:
+              raise SystemExit("lib/replace configure hook not found")
+          s = s.replace(marker, marker + "\n    conf.load(\'compiler_cc\')", 1)
+          p.write_text(s)
+          PY
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
