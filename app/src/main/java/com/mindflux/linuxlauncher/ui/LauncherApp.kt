@@ -50,6 +50,8 @@ fun LauncherApp() {
     var tab by remember { mutableStateOf(Tab.HOME) }
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<Distro?>(null) }
+    var installDistro by remember { mutableStateOf<Distro?>(null) }
+    var terminalDistro by remember { mutableStateOf<String?>(null) }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mint, secondary = Lilac, background = Background,
@@ -116,12 +118,24 @@ fun LauncherApp() {
                     Detail("Family", distro.family)
                     Detail("Desktop options", distro.desktopHint)
                     Detail("Architecture", distro.architecture)
-                    Text("Catalogue information only. Linux installation is not implemented in this build.", color = Color(0xFFFFC98B), fontSize = 11.sp)
+                    Text(if (distro.id == "ubuntu" || distro.id == "debian") "Install a real Linux root filesystem, then open its terminal." else "This distro is listed for discovery; its install image is not configured yet.", color = Color(0xFFFFC98B), fontSize = 11.sp)
                 }
             },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("Close", color = Mint) } }
+            confirmButton = {
+                Row {
+                    TextButton(onClick = { selected = null }) { Text("Close", color = Muted) }
+                    TextButton(onClick = { installDistro = distro; selected = null }) { Text("Install / Open", color = Mint) }
+                }
+            }
         )
     }
+    installDistro?.let { distro ->
+        LinuxInstallDialog(distro, onDismiss = { installDistro = null }, onInstalled = { id ->
+            installDistro = null
+            terminalDistro = id
+        })
+    }
+    terminalDistro?.let { id -> LinuxTerminalDialog(id, onDismiss = { terminalDistro = null }) }
 }
 
 @Composable
