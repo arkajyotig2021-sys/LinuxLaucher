@@ -202,6 +202,14 @@ jobs:
           PY
           # The bundled talloc Waf version does not recognize this flag.
           sed -i -e 's/--disable-rpath//g' -e 's/--disable-python//g' -e 's/--cross-compile//g' -e 's/--cross-answers=cross-answers.txt//g' make-talloc-static.sh
+          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_configure <<'PY'
+          def configure(conf):
+              pass
+          PY
+          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_build <<'PY'
+          def build(bld):
+              pass
+          PY
           retry_step "Build static talloc dependency" ./make-talloc-static.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
