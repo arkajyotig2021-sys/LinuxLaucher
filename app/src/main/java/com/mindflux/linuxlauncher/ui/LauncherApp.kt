@@ -91,15 +91,15 @@ fun LauncherApp() {
 
 @Composable
 private fun NavItem(current: Tab, item: Tab, label: String, icon: ImageVector, choose: (Tab) -> Unit) {
-    NavigationBarItem(
-        selected = current == item, onClick = { choose(item) },
-        icon = { Icon(icon, contentDescription = label) }, label = { Text(label, fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = Mint, selectedTextColor = Mint,
-            indicatorColor = Color(0xFF233A36),
-            unselectedIconColor = Muted, unselectedTextColor = Muted
-        )
-    )
+    val selected = current == item
+    Column(
+        modifier = Modifier.fillMaxWidth(0.25f).clickable { choose(item) }.padding(vertical = 7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = if (selected) Mint else Muted)
+        Text(label, color = if (selected) Mint else Muted, fontSize = 9.sp, maxLines = 1)
+    }
 }
 
 @Composable
@@ -205,7 +205,7 @@ private fun Explore(query: String, change: (String) -> Unit, select: (Distro) ->
         )
         Spacer(Modifier.height(12.dp))
         Text("${results.size} DISTRIBUTIONS", color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        LazyColumn(contentPadding = PaddingValues(top = 9.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(top = 9.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(results, key = { it.id }) { distro ->
                 val initial = distro.name.firstOrNull()?.uppercase() ?: "L"
                 Surface(Modifier.fillMaxWidth().clickable { select(distro) }, color = SurfaceDark, shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Stroke)) {
