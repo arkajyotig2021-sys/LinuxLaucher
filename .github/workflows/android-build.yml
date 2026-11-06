@@ -118,128 +118,29 @@ jobs:
           chmod +x get-talloc.sh
           retry_download "Download talloc sources" "build/talloc-2.1.14" ./get-talloc.sh
           retry_download "Download PRoot sources" "build/proot-0.15_release" ./get-proot.sh
-          echo "Converting bundled Waf/talloc Python 2 source to Python 3"
-          find build/talloc-2.1.14/third_party/waf -type f -name '*.py' -print0 | xargs -0 python -m lib2to3 -w -n
-          python -m lib2to3 -w -n build/talloc-2.1.14/wscript build/talloc-2.1.14/buildtools
-          python -m lib2to3 -w -n build/talloc-2.1.14/buildtools/bin/waf
-          # Python 3 rejects mixed indentation in several legacy Samba Waf scripts.
-          # Normalize tabs consistently after conversion, including extensionless wscript files.
-          python - <<'PY'
-          from pathlib import Path
-          root = Path("build/talloc-2.1.14")
-          candidates = [p for p in root.rglob("*") if p.is_file() and (p.suffix == ".py" or p.name == "wscript")]
-          for path in candidates:
-              try:
-                  source = path.read_text()
-              except UnicodeDecodeError:
-                  continue
-              # Waf's cc.py embeds a second Python program in a string and
-              # executes it. Its escaped tab sequences survive expandtabs(),
-              # then become real tabs in the generated program and trigger
-              # Python 3 TabError. Normalize those embedded indentation tabs.
-              if path.name == "cc.py" and "wafadmin/Tools" in path.as_posix():
-                  source = source.replace(chr(92) + "t", "        ")
-              normalized = source.expandtabs(8)
-              if normalized != source:
-                  path.write_text(normalized)
-          PY
-          # Normalize the generated C compiler task template before Waf compiles it.
-          python - <<'PY'
-          from pathlib import Path
-          cc_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Tools/cc.py")
-          cc_source = cc_path.read_text()
-          needle = "cls = Task.simple_task_type('cc', cc_str,"
-          replacement = "cc_str = cc_str.replace(chr(9), '    ')\n" + needle
-          if needle not in cc_source:
-              raise SystemExit("Could not find Waf C compiler task template")
-          cc_path.write_text(cc_source.replace(needle, replacement, 1))
-          PY
-          # Normalize legacy generated task source at Waf's final Python exec boundary.
-          python - <<'PY'
-          from pathlib import Path
-          task_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Task.py")
-          task_source = task_path.read_text()
-          if "exec(c, dc)" not in task_source:
-              raise SystemExit("Could not find Waf generated-task exec boundary")
-          task_path.write_text(task_source.replace("exec(c, dc)", "exec(c.expandtabs(8), dc)", 1))
-          PY
-          # Waf loads Samba helpers as top-level modules, not as a Python package.
-          # lib2to3's import fixer creates package-relative imports that fail in that mode.
-          # Restore absolute sibling imports and assert the helper tree is package-independent.
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          package = Path("build/talloc-2.1.14/buildtools/wafsamba")
-          for path in package.rglob("*.py"):
-              source = path.read_text()
-              fixed = re.sub(
-                  r"(?m)^from \. import ([A-Za-z_][A-Za-z0-9_]*(?:\s*,\s*[A-Za-z_][A-Za-z0-9_]*)*)\s*$",
-                  r"import \1",
-                  source,
-              )
-              fixed = re.sub(
-                  r"(?m)^from \.([A-Za-z_][A-Za-z0-9_]*) import ",
-                  r"from \1 import ",
-                  fixed,
-              )
-              if re.search(r"(?m)^from \.", fixed):
-                  raise SystemExit("Unresolved package-relative import in %s" % path)
-              if fixed != source:
-                  path.write_text(fixed)
-          PY
-          find build/talloc-2.1.14/third_party/waf/wafadmin -type f -name '*.py' -exec sed -i -E \
-            -e 's/from \. import /import /g' \
-            -e 's/from \.([A-Za-z_][A-Za-z0-9_]*) import /from \1 import /g' {} +
-          python - <<'PY'
-          from pathlib import Path
-          utils_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Utils.py")
-          utils = utils_path.read_text()
-          if "f = open(fname, m)" not in utils:
-              raise SystemExit("Could not find legacy Waf file-open mode")
-          utils_path.write_text(utils.replace("f = open(fname, m)", "f = open(fname, m.replace('U', ''))", 1))
-          options_path = Path("build/talloc-2.1.14/third_party/waf/wafadmin/Options.py")
-          options = options_path.read_text()
-          if "default_jobs = int(default_jobs)" not in options:
-              if "if default_jobs < 1:" not in options:
-                  raise SystemExit("Could not find legacy Waf worker-count check")
-              options = options.replace("if default_jobs < 1:", "default_jobs = int(default_jobs)\nif default_jobs < 1:", 1)
-              options_path.write_text(options)
-          PY
-          # The standalone talloc release omits this optional Samba hook, but
-          # its bundled lib/replace Waf script probes it unconditionally.
-          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_set_options <<'PY'
-          def options(opt):
-              opt.load('compiler_cc')
-          PY
-          # The bundled talloc Waf version does not recognize this flag.
-          sed -i -e 's/--disable-rpath//g' -e 's/--disable-python//g' -e 's/--cross-compile//g' -e 's/--cross-answers=cross-answers.txt//g' make-talloc-static.sh
-          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_configure <<'PY'
-          def configure(conf):
-              conf.load('compiler_cc')
-          PY
-          cat > build/talloc-2.1.14/buildtools/wafsamba/wscript_build <<'PY'
-          def build(bld):
-              pass
-          PY
-          # Validate the first target compiler and make it available to Waf.
+          # Build talloc directly with the Android NDK. The upstream release uses an old
+          # Samba/Waf toolchain that is not required to produce the static library PRoot needs.
+          cat > build-talloc-static-direct.sh <<'TALLOC_BUILD'
+          #!/usr/bin/env bash
+          set -euo pipefail
           . ./config
-          ARCH=aarch64
-          set-arch "$ARCH"
-          echo "Android NDK C compiler: $CC"
-          test -x "$CC"
-          "$CC" --version
-          # lib/replace has a configure hook but no options hook; initialize its C compiler there.
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("build/talloc-2.1.14/lib/replace/wscript")
-          s = p.read_text()
-          marker = "def configure(conf):"
-          if marker not in s:
-              raise SystemExit("lib/replace configure hook not found")
-          s = s.replace(marker, marker + "\n    conf.load(\'compiler_cc\')", 1)
-          p.write_text(s)
-          PY
-          retry_step "Build static talloc dependency" ./make-talloc-static.sh
+          for ARCH in $ARCHS; do
+            set-arch "$ARCH"
+            mkdir -p "$STATIC_ROOT/include" "$STATIC_ROOT/lib"
+            src="$BUILD_DIR/talloc-$TALLOC_V/talloc.c"
+            header="$BUILD_DIR/talloc-$TALLOC_V/talloc.h"
+            test -s "$src"
+            test -s "$header"
+            obj="$BUILD_DIR/talloc-$TALLOC_V/talloc-$ARCH.o"
+            "$CC" -std=gnu99 -O2 -fPIC -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -I"$BUILD_DIR/talloc-$TALLOC_V" -c "$src" -o "$obj"
+            "$AR" rcs "$STATIC_ROOT/lib/libtalloc.a" "$obj"
+            "$RANLIB" "$STATIC_ROOT/lib/libtalloc.a"
+            cp "$header" "$STATIC_ROOT/include/talloc.h"
+            echo "Built static libtalloc for $ARCH using $CC"
+          done
+          TALLOC_BUILD
+          chmod +x build-talloc-static-direct.sh
+          retry_step "Build static talloc dependency" ./build-talloc-static-direct.sh
           retry_step "Build PRoot executables" ./make-proot.sh
           retry_step "Package PRoot outputs" ./pack.sh
           retry_step "Create APK-compatible PRoot loaders" ./make-proot-for-apk.sh
