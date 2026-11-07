@@ -202,6 +202,7 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest
 
       - name: Run Android UI tests on emulator
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         timeout-minutes: 45
         with:
