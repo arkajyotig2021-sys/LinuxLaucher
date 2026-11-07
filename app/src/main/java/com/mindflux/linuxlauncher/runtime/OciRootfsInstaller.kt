@@ -3,6 +3,11 @@ package com.mindflux.linuxlauncher.runtime
 import android.os.Build
 import android.system.Os
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -82,22 +87,45 @@ class OciRootfsInstaller(private val filesDir: File) {
                     requestJson(registryBase + repo + "/manifests/" + descriptor.getString("digest"), token, manifestAccept)
                 }
                 val layers = selected.getJSONArray("layers")
-                for (i in 0 until layers.length()) {
-                    val layer = layers.getJSONObject(i)
+                val descriptors = (0 until layers.length()).map { layers.getJSONObject(it) }
+                val archives = descriptors.map { layer ->
                     val digest = layer.getString("digest")
-                    val mediaType = layer.optString("mediaType")
                     require(digest.matches(Regex("sha256:[a-f0-9]{64}"))) { "Invalid layer digest" }
-                    val archive = File(work, digest.removePrefix("sha256:") + ".layer")
-                    if (!archive.isFile || sha256(archive) != digest.removePrefix("sha256:")) {
-                        archive.delete()
-                        onProgress(Progress("Downloading layer " + (i + 1) + "/" + layers.length()))
-                        download(registryBase + repo + "/blobs/" + digest, token, archive) { got, total ->
-                            onProgress(Progress("Downloading layer " + (i + 1) + "/" + layers.length(), got, total))
+                    File(work, digest.removePrefix("sha256:") + ".layer")
+                }
+                val expectedTotal = descriptors.sumOf { it.optLong("size", -1L) }
+                    .takeIf { it > 0L && descriptors.all { d -> d.optLong("size", -1L) > 0L } } ?: -1L
+                val layerProgress = LongArray(descriptors.size)
+                val progressLock = Any()
+                val downloadSlots = Semaphore(2)
+                coroutineScope {
+                    descriptors.mapIndexed { index, layer ->
+                        async(Dispatchers.IO) {
+                            downloadSlots.withPermit {
+                                val digest = layer.getString("digest").removePrefix("sha256:")
+                                val archive = archives[index]
+                                if (!archive.isFile || sha256(archive) != digest) {
+                                    archive.delete()
+                                    onProgress(Progress("Downloading layers · up to 2 connections"))
+                                    download(registryBase + repo + "/blobs/sha256:" + digest, token, archive) { got, _ ->
+                                        val aggregate = synchronized(progressLock) {
+                                            layerProgress[index] = got
+                                            layerProgress.sum()
+                                        }
+                                        onProgress(Progress("Downloading layer ${index + 1}/${descriptors.size} · 2-connection mode", aggregate, expectedTotal))
+                                    }
+                                    check(sha256(archive) == digest) { "Layer checksum failed" }
+                                } else {
+                                    synchronized(progressLock) { layerProgress[index] = archive.length() }
+                                }
+                            }
                         }
-                        check(sha256(archive) == digest.removePrefix("sha256:")) { "Layer checksum failed" }
-                    }
-                    onProgress(Progress("Extracting layer " + (i + 1) + "/" + layers.length()))
-                    extractLayer(archive, staging, mediaType)
+                    }.awaitAll()
+                }
+                // OCI layers are applied in manifest order even though their transfers overlap.
+                descriptors.forEachIndexed { index, layer ->
+                    onProgress(Progress("Extracting layer ${index + 1}/${descriptors.size}"))
+                    extractLayer(archives[index], staging, layer.optString("mediaType"))
                 }
                 check(File(staging, "bin").exists() || File(staging, "usr/bin").exists()) {
                     "Downloaded image is not a valid Linux root filesystem"
@@ -181,7 +209,11 @@ class OciRootfsInstaller(private val filesDir: File) {
         val previousBytes = partial.length()
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 20000
-        c.readTimeout = 60000
+        c.readTimeout = 120000
+        c.instanceFollowRedirects = true
+        c.setRequestProperty("Accept-Encoding", "identity")
+        c.setRequestProperty("Connection", "keep-alive")
+        c.setRequestProperty("User-Agent", "LinuxLauncher-Android/0.3")
         if (token != null) c.setRequestProperty("Authorization", "Bearer " + token)
         if (previousBytes > 0L) c.setRequestProperty("Range", "bytes=" + previousBytes + "-")
         try {
@@ -197,9 +229,9 @@ class OciRootfsInstaller(private val filesDir: File) {
             val initialBytes = if (append) previousBytes else 0L
             val contentLength = c.contentLengthLong
             val total = if (contentLength > 0L) contentLength + initialBytes else -1L
-            c.inputStream.use { input ->
+            BufferedInputStream(c.inputStream, 512 * 1024).use { input ->
                 FileOutputStream(partial, append).use { output ->
-                    val buffer = ByteArray(128 * 1024)
+                    val buffer = ByteArray(512 * 1024)
                     var done = initialBytes
                     progress(done, total)
                     while (true) {
