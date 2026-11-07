@@ -105,6 +105,7 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
  var installed by remember(rootfs){mutableStateOf(File(rootfs,"usr/bin/startxfce4").exists() && File(rootfs,"usr/bin/vncserver").exists())}
  var working by remember{mutableStateOf(false)}; var ready by remember{mutableStateOf(false)}; var viewer by remember{mutableStateOf(false)}
  var errorMessage by remember{mutableStateOf<String?>(null)}; val log= remember{mutableStateListOf<String>()}
+  var renderer by remember(distroId) { mutableStateOf("CPU") }
  suspend fun execute(command:String):Int {
   val binary=RuntimeBinaryLocator(context).prootExecutable() ?: error("PRoot engine is missing from this APK build.")
   val process=withContext(Dispatchers.IO){LinuxRuntimeSession(binary,rootfs,PerformancePolicy.resolve(context).threadPriority).startCommand(command)}
@@ -135,11 +136,24 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
    Text("$distroId · XFCE desktop",color=Color(0xFF69E6B7),style=MaterialTheme.typography.titleLarge)
    Text("Lightweight desktop streamed locally to this app. It shares Android's kernel and uses your phone's CPU and RAM.",color=Color(0xFFE1E8EF))
    if(working) LinearProgressIndicator(Modifier.fillMaxWidth())
+    Text("Rendering backend",color=Color(0xFF69E6B7),style=MaterialTheme.typography.titleSmall)
+    Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+     RadioButton(selected=renderer=="CPU",onClick={renderer="CPU"})
+     Column { Text("Phone CPU · Available",color=Color(0xFFE1E8EF)); Text("Supported software rendering through the local VNC desktop.",color=Color(0xFF8290A0),style=MaterialTheme.typography.bodySmall) }
+    }
+    Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+     RadioButton(selected=false,onClick=null,enabled=false)
+     Column { Text("Phone GPU · Unavailable",color=Color(0xFF8290A0)); Text("The current TigerVNC/noVNC path has no Android GPU passthrough.",color=Color(0xFF8290A0),style=MaterialTheme.typography.bodySmall) }
+    }
+    Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
+     RadioButton(selected=false,onClick=null,enabled=false)
+     Column { Text("Kaggle GPU · Unavailable",color=Color(0xFF8290A0)); Text("Kaggle GPU is notebook-session compute, not a supported persistent remote renderer for this local desktop.",color=Color(0xFF8290A0),style=MaterialTheme.typography.bodySmall) }
+    }
    errorMessage?.let{Text(it,color=MaterialTheme.colorScheme.error)}
    if(log.isNotEmpty()) LazyColumn(Modifier.fillMaxWidth().height(130.dp)){items(log){Text(it,color=Color(0xFFB7C6D6),style=MaterialTheme.typography.bodySmall)}}
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
     Button(enabled=!working&&!installed,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(setup);if(code!=0){errorMessage="Desktop installation failed (exit $code).";LauncherErrorHistory.record(context,"Desktop installation","Exit $code\n"+log.joinToString("\n"));LauncherNotifications.error(context,"Desktop installation failed",errorMessage?:"Exit $code")}else { installed=true; LauncherNotifications.finished(context,"XFCE installed","$distroId desktop is ready.") }}catch(t:Throwable){errorMessage=t.message?:"Setup failed.";LauncherErrorHistory.record(context,"Desktop setup",t.stackTraceToString());LauncherNotifications.error(context,"Desktop setup failed",errorMessage?:"Unknown error")}finally{working=false}}}){Text(if(installed)"Installed" else "Install XFCE")}
-    Button(enabled=installed&&!working,onClick={working=true;errorMessage=null;log.clear();scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true;LauncherNotifications.finished(context,"Linux desktop started","$distroId XFCE is running.")}else {errorMessage="Desktop start failed (exit $code).";LauncherErrorHistory.record(context,"Desktop launch","Exit $code\n"+log.joinToString("\n"));LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Exit $code")}}catch(t:Throwable){errorMessage=t.message?:"Launch failed.";LauncherErrorHistory.record(context,"Desktop launch",t.stackTraceToString());LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Unknown error")}finally{working=false}}}){Text("Launch desktop")}
+    Button(enabled=installed&&!working,onClick={working=true;errorMessage=null;log.clear();log.add("Rendering backend: $renderer");scope.launch{try{val code=execute(start);if(code==0){ready=true;viewer=true;LauncherNotifications.finished(context,"Linux desktop started","$distroId XFCE is running.")}else {errorMessage="Desktop start failed (exit $code).";LauncherErrorHistory.record(context,"Desktop launch","Exit $code\n"+log.joinToString("\n"));LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Exit $code")}}catch(t:Throwable){errorMessage=t.message?:"Launch failed.";LauncherErrorHistory.record(context,"Desktop launch",t.stackTraceToString());LauncherNotifications.error(context,"Desktop launch failed",errorMessage?:"Unknown error")}finally{working=false}}}){Text("Launch desktop")}
    }
    TextButton(onClick=onDismiss,enabled=!working){Text("Close")}
   }
