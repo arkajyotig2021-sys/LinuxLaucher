@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -220,10 +220,27 @@ jobs:
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
 
-      - name: Upload debug APK
+      - name: Prepare ARM64 APK for direct download
+        if: github.event_name != 'pull_request'
+        run: cp app/build/outputs/apk/debug/arm64-v8a/app-arm64-v8a-debug.apk LinuxLauncher-arm64-debug.apk
+
+      - name: Publish smaller ARM64 APK release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: linuxlauncher-arm64-${{ github.run_number }}
+          name: Linux Launcher ARM64 build ${{ github.run_number }}
+          body: |
+            Device-specific ARM64 debug APK. This package contains only the ARM64 native PRoot runtime, reducing download size compared with the universal APK.
+
+            Kaggle GPU and Android GPU passthrough are not available as desktop renderers in this build. CPU/VNC rendering remains the supported path.
+          prerelease: true
+          files: LinuxLauncher-arm64-debug.apk
+
+      - name: Upload ABI-specific debug APKs
         uses: actions/upload-artifact@v4
         with:
-          name: LinuxLauncher-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: LinuxLauncher-debug-apks
+          path: app/build/outputs/apk/debug/**/*.apk
           if-no-files-found: error
           retention-days: 14
