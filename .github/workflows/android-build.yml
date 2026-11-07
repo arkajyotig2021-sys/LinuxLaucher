@@ -223,7 +223,9 @@ jobs:
 
       - name: Prepare ARM64 APK for direct download
         if: github.event_name != 'pull_request'
-        run: set -euo pipefail
+        shell: bash
+        run: |
+          set -euo pipefail
           APK="app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
           if [[ ! -s "$APK" ]]; then
             echo "Expected ARM64 split APK not found. Available APK outputs:"
