@@ -223,7 +223,14 @@ jobs:
 
       - name: Prepare ARM64 APK for direct download
         if: github.event_name != 'pull_request'
-        run: cp app/build/outputs/apk/debug/arm64-v8a/app-arm64-v8a-debug.apk LinuxLauncher-arm64-debug.apk
+        run: set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"
+          if [[ ! -s "$APK" ]]; then
+            echo "Expected ARM64 split APK not found. Available APK outputs:"
+            find app/build/outputs/apk -type f -name '*.apk' -print || true
+            exit 1
+          fi
+          cp "$APK" LinuxLauncher-arm64-debug.apk
 
       - name: Publish smaller ARM64 APK release
         if: github.event_name != 'pull_request'
