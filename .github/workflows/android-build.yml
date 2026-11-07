@@ -215,18 +215,7 @@ jobs:
           ram-size: 3072M
           heap-size: 768M
           disable-animations: true
-          script: |
-            set -euo pipefail
-            adb wait-for-device
-            for attempt in $(seq 1 60); do
-              booted=$(adb shell getprop sys.boot_completed | tr -d '\r')
-              if [[ "$booted" == "1" ]]; then break; fi
-              sleep 2
-            done
-            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
-            adb devices -l
-            adb shell getprop ro.build.version.sdk
-            gradle --no-daemon --info :app:connectedDebugAndroidTest
+          script: adb wait-for-device && test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" && adb devices -l && adb shell getprop ro.build.version.sdk && gradle --no-daemon --info :app:connectedDebugAndroidTest
 
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
