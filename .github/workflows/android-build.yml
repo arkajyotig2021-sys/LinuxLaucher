@@ -203,19 +203,30 @@ jobs:
 
       - name: Run Android UI tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
-        timeout-minutes: 20
+        timeout-minutes: 45
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -wipe-data
-          emulator-boot-timeout: 600
-          cores: 2
-          ram-size: 2048M
-          heap-size: 512M
+          emulator-boot-timeout: 1200
+          cores: 4
+          ram-size: 3072M
+          heap-size: 768M
           disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          script: |
+            set -euo pipefail
+            adb wait-for-device
+            for attempt in $(seq 1 60); do
+              booted=$(adb shell getprop sys.boot_completed | tr -d '\r')
+              if [[ "$booted" == "1" ]]; then break; fi
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            adb devices -l
+            adb shell getprop ro.build.version.sdk
+            gradle --no-daemon --info :app:connectedDebugAndroidTest
 
       - name: Assemble debug APK
         run: gradle --no-daemon :app:assembleDebug
