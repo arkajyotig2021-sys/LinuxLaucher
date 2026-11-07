@@ -97,7 +97,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                     .takeIf { it > 0L && descriptors.all { d -> d.optLong("size", -1L) > 0L } } ?: -1L
                 val layerProgress = LongArray(descriptors.size)
                 val progressLock = Any()
-                val downloadSlots = Semaphore(2)
+                val downloadSlots = Semaphore(4)
                 coroutineScope {
                     descriptors.mapIndexed { index, layer ->
                         async(Dispatchers.IO) {
@@ -112,7 +112,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                                             layerProgress[index] = got
                                             layerProgress.sum()
                                         }
-                                        onProgress(Progress("Downloading layer ${index + 1}/${descriptors.size} · 2-connection mode", aggregate, expectedTotal))
+                                        onProgress(Progress("Downloading layer ${index + 1}/${descriptors.size} · 4-connection mode", aggregate, expectedTotal))
                                     }
                                     check(sha256(archive) == digest) { "Layer checksum failed" }
                                 } else {
@@ -229,9 +229,9 @@ class OciRootfsInstaller(private val filesDir: File) {
             val initialBytes = if (append) previousBytes else 0L
             val contentLength = c.contentLengthLong
             val total = if (contentLength > 0L) contentLength + initialBytes else -1L
-            BufferedInputStream(c.inputStream, 512 * 1024).use { input ->
+            BufferedInputStream(c.inputStream, 1024 * 1024).use { input ->
                 FileOutputStream(partial, append).use { output ->
-                    val buffer = ByteArray(512 * 1024)
+                    val buffer = ByteArray(1024 * 1024)
                     var done = initialBytes
                     progress(done, total)
                     while (true) {
