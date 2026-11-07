@@ -2,10 +2,13 @@ package com.mindflux.linuxlauncher.ui
 
 import android.app.ActivityManager
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
+import android.net.TrafficStats
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,10 +49,24 @@ internal fun PerformanceDashboard() {
     var previousAppCpu by remember { mutableStateOf(Process.getElapsedCpuTime()) }
     var previousWall by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
     var previousSystem by remember { mutableStateOf(readCpuCounters()) }
+    var networkLabel by remember { mutableStateOf(readNetworkLabel(context)) }
+    var downloadRate by remember { mutableStateOf(0L) }
+    var uploadRate by remember { mutableStateOf(0L) }
+    var previousRx by remember { mutableStateOf(TrafficStats.getUidRxBytes(Process.myUid())) }
+    var previousTx by remember { mutableStateOf(TrafficStats.getUidTxBytes(Process.myUid())) }
+    var previousNetworkSample by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(2_000)
+            val rxNow = TrafficStats.getUidRxBytes(Process.myUid())
+            val txNow = TrafficStats.getUidTxBytes(Process.myUid())
+            val sampleNow = SystemClock.elapsedRealtime()
+            val sampleMs = (sampleNow - previousNetworkSample).coerceAtLeast(1L)
+            if (rxNow >= 0L && previousRx >= 0L) downloadRate = ((rxNow - previousRx).coerceAtLeast(0L) * 1000L) / sampleMs
+            if (txNow >= 0L && previousTx >= 0L) uploadRate = ((txNow - previousTx).coerceAtLeast(0L) * 1000L) / sampleMs
+            previousRx = rxNow; previousTx = txNow; previousNetworkSample = sampleNow
+            networkLabel = readNetworkLabel(context)
             val appNow = Process.getElapsedCpuTime()
             val wallNow = SystemClock.elapsedRealtime()
             val wallDelta = (wallNow - previousWall).coerceAtLeast(1L)
@@ -90,6 +107,12 @@ internal fun PerformanceDashboard() {
                 Metric("Headroom", snapshot.headroom)
                 Metric("Effective mode", snapshot.mode)
             }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Metric("Network", networkLabel)
+                Metric("App download", formatRate(downloadRate))
+                Metric("App upload", formatRate(uploadRate))
+            }
+            Text("Network rates measure this app's traffic only, not your carrier/Wi-Fi maximum speed.", color = Color(0xFF8290A0), fontSize = 9.sp)
             Text(snapshot.adaptation, color = Color(0xFF69E6B7), fontSize = 9.sp)
             Text("System CPU is sampled from /proc/stat when Android permits access; app CPU is this app process only. Headroom estimates responsiveness from memory and thermal state, not measured frame latency. Android may restrict telemetry and scheduling.", color = Color(0xFF8290A0), fontSize = 9.sp, lineHeight = 13.sp)
         }
@@ -122,3 +145,27 @@ private fun readCpuCounters(): CpuCounters? = runCatching {
 }.getOrNull()
 
 private fun formatRam(bytes: Long): String = String.format(Locale.getDefault(), "%.1f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+
+
+private fun readNetworkLabel(context: Context): String = runCatching {
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = manager.activeNetwork ?: return "Offline"
+    val caps = manager.getNetworkCapabilities(network) ?: return "Offline"
+    if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return "No internet"
+    val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    val transport = when {
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "Mobile data"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "VPN"
+        else -> "Connected"
+    }
+    transport + if (validated) " · Internet OK" else " · Not validated"
+}.getOrDefault("Network unavailable")
+
+private fun formatRate(bytesPerSecond: Long): String = when {
+    bytesPerSecond < 0L -> "Unavailable"
+    bytesPerSecond < 1024L -> "$bytesPerSecond B/s"
+    bytesPerSecond < 1024L * 1024L -> String.format(Locale.US, "%.1f KB/s", bytesPerSecond / 1024.0)
+    else -> String.format(Locale.US, "%.2f MB/s", bytesPerSecond / (1024.0 * 1024.0))
+}
