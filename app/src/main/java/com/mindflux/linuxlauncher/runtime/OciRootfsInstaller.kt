@@ -106,7 +106,7 @@ class OciRootfsInstaller(private val filesDir: File) {
                                 val archive = archives[index]
                                 if (!archive.isFile || sha256(archive) != digest) {
                                     archive.delete()
-                                    onProgress(Progress("Downloading layers · up to 2 connections"))
+                                    onProgress(Progress("Downloading layers · up to 4 connections"))
                                     download(registryBase + repo + "/blobs/sha256:" + digest, token, archive) { got, _ ->
                                         val aggregate = synchronized(progressLock) {
                                             layerProgress[index] = got
