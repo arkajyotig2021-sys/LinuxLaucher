@@ -68,6 +68,14 @@ jobs:
           if old_arches not in s:
               raise SystemExit("Expected upstream architecture matrix not found")
           p.write_text(s.replace(old_arches, new_arches, 1))
+          # PRoot stores tracee register words in unsigned long. Force the Android
+          # arm64 LP64 ABI explicitly; an ILP32 PRoot binary rejects 64-bit Debian ELF.
+          for name in ("make-proot.sh", "make-proot-for-apk.sh"):
+              q = Path(name)
+              t = q.read_text()
+              t = t.replace('export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"',
+                            'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"\nif [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
+              q.write_text(t)
           PY
           retry_step() {
             local step="$1"; shift
