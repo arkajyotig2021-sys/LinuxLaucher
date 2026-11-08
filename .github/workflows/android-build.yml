@@ -70,7 +70,7 @@ jobs:
           for name in ("make-proot.sh", "make-proot-for-apk.sh"):
               q = Path(name)
               t = q.read_text()
-              check = 'set-arch $ARCH' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then printf "%s" "_Static_assert(sizeof(unsigned long) == 8, \"AArch64 word_t must be 64-bit\"); int main(void){return 0;}" | "$CC" -x c -c -o /tmp/linuxlauncher-proot-arm64-abi.o -; fi'
+              check = 'set-arch $ARCH' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then printf "%s\n" '#if __SIZEOF_LONG__ != 8' '#error BAD_LONG_SIZE' '#endif' 'int main(void){return 0;}' | "$CC" -x c -c -o /tmp/linuxlauncher-proot-arm64-abi.o -; fi'
               t = t.replace('set-arch $ARCH', check, 1)
               q.write_text(t)
           # Verify the Android NDK's AArch64 compiler uses 64-bit long/pointers.
