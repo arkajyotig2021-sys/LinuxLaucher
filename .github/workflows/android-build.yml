@@ -66,13 +66,10 @@ jobs:
           lines[ndk_index] = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
           lines[arch_index] = "ARCHS='aarch64 armv7a x86_64 i686'"
           p.write_text("\n".join(lines) + "\n")
-          # PRoot stores tracee register words in unsigned long. Force LP64 for arm64.
-          for name in ("make-proot.sh", "make-proot-for-apk.sh"):
-              q = Path(name)
-              t = q.read_text()
-              t = t.replace('export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"',
-                            'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
-              q.write_text(t)
+          # Verify the Android NDK's AArch64 compiler uses 64-bit long/pointers.
+          from pathlib import Path
+          check = Path("/tmp/linuxlauncher-arm64-abi-check.c")
+          check.write_text('_Static_assert(sizeof(unsigned long) == 8, "AArch64 long must be 64-bit"); _Static_assert(sizeof(void*) == 8, "AArch64 pointer must be 64-bit"); int main(void){return 0;}')
           PY
           retry_step() {
             local step="$1"; shift
