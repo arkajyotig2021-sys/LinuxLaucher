@@ -74,7 +74,7 @@ jobs:
               q = Path(name)
               t = q.read_text()
               t = t.replace('export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"',
-                            'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"\nif [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
+                            'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
               q.write_text(t)
           PY
           . ./config
