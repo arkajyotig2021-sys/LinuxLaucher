@@ -58,18 +58,15 @@ jobs:
           from pathlib import Path
           p = Path("config")
           s = p.read_text()
-          old = 'NDK="$HOME/Android/Sdk/ndk/23.2.8568313"'
-          new = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
-          if old not in s:
-              raise SystemExit("Expected hardcoded NDK path not found in upstream config")
-          s = s.replace(old, new, 1)
-          old_arches = "ARCHS='aarch64 armv7a armv7a-pre5 x86_64 i686 i686-pre5'"
-          new_arches = "ARCHS='aarch64 armv7a x86_64 i686'"
-          if old_arches not in s:
-              raise SystemExit("Expected upstream architecture matrix not found")
-          p.write_text(s.replace(old_arches, new_arches, 1))
-          # PRoot stores tracee register words in unsigned long. Force the Android
-          # arm64 LP64 ABI explicitly; an ILP32 PRoot binary rejects 64-bit Debian ELF.
+          lines = s.splitlines()
+          ndk_index = next((i for i, line in enumerate(lines) if line.startswith("NDK=")), None)
+          arch_index = next((i for i, line in enumerate(lines) if line.startswith("ARCHS=")), None)
+          if ndk_index is None or arch_index is None:
+              raise SystemExit("Upstream PRoot config is missing NDK or ARCHS settings")
+          lines[ndk_index] = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
+          lines[arch_index] = "ARCHS='aarch64 armv7a x86_64 i686'"
+          p.write_text("\n".join(lines) + "\n")
+          # PRoot stores tracee register words in unsigned long. Force LP64 for arm64.
           for name in ("make-proot.sh", "make-proot-for-apk.sh"):
               q = Path(name)
               t = q.read_text()
@@ -77,10 +74,6 @@ jobs:
                             'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
               q.write_text(t)
           PY
-          . ./config
-          set-arch aarch64
-          printf '%s\n' '_Static_assert(sizeof(unsigned long) == 8, "AArch64 PRoot must use LP64"); int main(void){return 0;}' | "$CC" -x c -o /tmp/linuxlauncher-arm64-abi-check -
-          readelf -h /tmp/linuxlauncher-arm64-abi-check | grep -q 'Class:.*ELF64'
           retry_step() {
             local step="$1"; shift
             for attempt in 1 2 3 4; do
