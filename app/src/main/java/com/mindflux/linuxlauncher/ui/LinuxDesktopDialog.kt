@@ -113,7 +113,23 @@ fun LinuxDesktopDialog(distroId:String,onDismiss:()->Unit) {
  }
  val setup="""
   set -e
-  if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y xfce4 dbus-x11 tigervnc-standalone-server novnc websockify;
+  if command -v apt-get >/dev/null 2>&1; then
+   export DEBIAN_FRONTEND=noninteractive
+   if [ ! -e /usr/sbin/policy-rc.d ]; then printf '%s\n' '#!/bin/sh' 'exit 101' > /usr/sbin/policy-rc.d; chmod 755 /usr/sbin/policy-rc.d; _ll_created_policy=1; fi
+   trap '[ \"${_ll_created_policy:-0}\" = 1 ] && rm -f /usr/sbin/policy-rc.d' EXIT
+   echo 'Refreshing Debian package indexes…'
+   apt-get update
+   echo 'Repairing any interrupted package configuration…'
+   apt-get install -y --no-install-recommends dbus-daemon dbus-x11
+   apt-get -f install -y
+   dpkg --configure -a
+   echo 'Installing XFCE and VNC desktop packages…'
+   apt-get install -y --no-install-recommends xfce4 dbus-x11 tigervnc-standalone-server novnc websockify
+   apt-get -f install -y
+   dpkg --configure -a
+   apt-get check
+   if [ \"${_ll_created_policy:-0}\" = 1 ]; then rm -f /usr/sbin/policy-rc.d; fi
+  else echo 'Automatic desktop setup currently supports apt-based Debian/Ubuntu images. Use your distro package manager from Terminal on other Linux images.'; exit 42; fi
   else echo 'Automatic desktop setup currently supports apt-based Debian/Ubuntu images. Use your distro package manager from Terminal on other Linux images.'; exit 42; fi
   mkdir -p /root/.vnc
   printf '%s\n' '#!/bin/sh' 'unset SESSION_MANAGER' 'unset DBUS_SESSION_BUS_ADDRESS' 'exec dbus-launch --exit-with-session startxfce4' > /root/.vnc/xstartup
