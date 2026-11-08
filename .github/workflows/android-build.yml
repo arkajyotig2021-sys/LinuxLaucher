@@ -66,6 +66,13 @@ jobs:
           lines[ndk_index] = 'NDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}/ndk/23.2.8568313"'
           lines[arch_index] = "ARCHS='aarch64 armv7a x86_64 i686'"
           p.write_text("\n".join(lines) + "\n")
+          # Confirm the NDK's AArch64 compiler uses 64-bit register words.
+          for name in ("make-proot.sh", "make-proot-for-apk.sh"):
+              q = Path(name)
+              t = q.read_text()
+              check = 'set-arch $ARCH' + chr(10) + 'if [ "$ARCH" = "aarch64" ]; then printf "%s" "_Static_assert(sizeof(unsigned long) == 8, \"AArch64 word_t must be 64-bit\"); int main(void){return 0;}" | "$CC" -x c -c -o /tmp/linuxlauncher-proot-arm64-abi.o -; fi'
+              t = t.replace('set-arch $ARCH', check, 1)
+              q.write_text(t)
           # Verify the Android NDK's AArch64 compiler uses 64-bit long/pointers.
           from pathlib import Path
           check = Path("/tmp/linuxlauncher-arm64-abi-check.c")
