@@ -77,6 +77,10 @@ jobs:
                             'export CFLAGS="-I$STATIC_ROOT/include -Werror=implicit-function-declaration"\nif [ "$ARCH" = "aarch64" ]; then export CFLAGS="$CFLAGS -mabi=lp64"; fi')
               q.write_text(t)
           PY
+          . ./config
+          set-arch aarch64
+          printf '%s\n' '_Static_assert(sizeof(unsigned long) == 8, "AArch64 PRoot must use LP64"); int main(void){return 0;}' | "$CC" -x c -o /tmp/linuxlauncher-arm64-abi-check -
+          readelf -h /tmp/linuxlauncher-arm64-abi-check | grep -q 'Class:.*ELF64'
           retry_step() {
             local step="$1"; shift
             for attempt in 1 2 3 4; do
