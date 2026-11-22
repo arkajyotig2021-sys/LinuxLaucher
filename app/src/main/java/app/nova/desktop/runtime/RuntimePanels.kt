@@ -56,14 +56,17 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                         headlineContent = { Text(app.label) },
                         supportingContent = { Text(app.packageName, style = MaterialTheme.typography.bodySmall) },
                         trailingContent = {
-                            TextButton(onClick = { runCatching { launcher.launch(app.packageName) } }) { Text("Launch") }
+                            Row {
+                                TextButton(onClick = { runCatching { launcher.launch(app.packageName) } }) { Text("Open") }
+                                TextButton(onClick = { runCatching { launcher.launchInSystemWindow(app.packageName) } }) { Text("Window") }
+                            }
                         }
                     )
                 }
             }
         }
         item {
-            Text("Android apps open in their own Android task. NOVA cannot embed arbitrary third-party Activities as resizable child windows without OS-level support.",
+            Text("Window asks Android to open an app in a system-managed freeform window. The device firmware may ignore this request. NOVA cannot embed arbitrary third-party Activities inside its own windows.",
                 style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -76,9 +79,9 @@ fun GraphicsInfoCard() {
     Card {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Graphics capability", style = MaterialTheme.typography.titleMedium)
-            Text("OpenGL ES: ${caps.openGlesVersion}")
-            Text("Vulkan hardware feature: ${if (caps.vulkanSupported) "available" else "not reported"}")
-            Text("Supported ABI: ${caps.supportedAbis.joinToString()}")
+            Text("OpenGL ES: " + caps.openGlesVersion)
+            Text("Vulkan hardware feature: " + if (caps.vulkanSupported) "available" else "not reported")
+            Text("Supported ABI: " + caps.supportedAbis.joinToString())
             Text(caps.note, style = MaterialTheme.typography.bodySmall)
         }
     }
