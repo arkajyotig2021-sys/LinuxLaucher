@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.documentfile.provider.DocumentFile
+import app.nova.desktop.graphics.GraphicsInfoCard
+import app.nova.desktop.runtime.RuntimeAppsScreen
 import java.util.Locale
 
 private val NovaBlue = Color(0xFF596DE8)
@@ -51,7 +53,7 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
     when (page) {
      "Home" -> HomeScreen(onFiles = { page = "Files" }, onOpen = { window = it })
      "Files" -> FilesScreen(tree, chooseFolder)
-     "Apps" -> AppsScreen { window = it }
+     "Apps" -> RuntimeAppsScreen { window = it }
      "Performance" -> PerformanceScreen(profile) { profile = it }
      else -> SettingsScreen(dark, { dark = it }, profile, { profile = it })
     }
@@ -106,9 +108,9 @@ private fun HomeScreen(onFiles: () -> Unit, onOpen: (String) -> Unit) {
    Card(shape = RoundedCornerShape(17.dp)) {
     Column(Modifier.padding(15.dp)) {
      Text("Compatibility engines", fontWeight = FontWeight.Bold)
-     Text("Windows runtime: not integrated", color = Quiet, fontSize = 12.sp)
-     Text("Linux runtime: not integrated", color = Quiet, fontSize = 12.sp)
-     Text("This preview does not claim to run Windows or Linux desktop binaries.", color = Quiet, fontSize = 11.sp)
+     Text("Windows: native runtime not bundled", color = Quiet, fontSize = 12.sp)
+     Text("Linux: userspace not bundled", color = Quiet, fontSize = 12.sp)
+     Text("This build does not claim Windows or Linux binary execution.", color = Quiet, fontSize = 11.sp)
     }
    }
   }
@@ -193,16 +195,6 @@ private fun openFile(context: Context, file: DocumentFile) {
 private fun readableSize(bytes: Long): String = if (bytes > 1024L * 1024) String.format(Locale.getDefault(), "%.1f MB", bytes / (1024.0 * 1024)) else bytes.toString() + " bytes"
 
 @Composable
-private fun AppsScreen(open: (String) -> Unit) {
- Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-  Text("Workspace tools", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-  ToolCard("NOVA Notes", "Local notes window", Icons.Default.EditNote) { open("Notes") }
-  ToolCard("System Monitor", "Live app memory snapshot", Icons.Default.Memory) { open("System Monitor") }
-  Text("Windows and Linux app execution is a future runtime milestone, not part of this preview.", color = Quiet, fontSize = 12.sp)
- }
-}
-
-@Composable
 private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
  val rt = Runtime.getRuntime()
  val used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
@@ -210,6 +202,7 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
   Text("Resource overview", fontSize = 18.sp, fontWeight = FontWeight.Bold)
   Metric("App heap in use", used.toString() + " / " + (rt.maxMemory() / (1024 * 1024)) + " MB", Modifier.fillMaxWidth())
   Metric("Available processors", rt.availableProcessors().toString(), Modifier.fillMaxWidth())
+  GraphicsInfoCard()
   Text("Performance preference", fontWeight = FontWeight.SemiBold)
   listOf("Smooth", "Balanced", "Battery Saver").forEach {
    Card(Modifier.fillMaxWidth().clickable { setProfile(it) }) {
@@ -219,7 +212,7 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
     }
    }
   }
-  Text("This preference is currently stored in the active screen state. It does not change Android CPU/GPU clocks or system scheduling.", color = Quiet, fontSize = 11.sp)
+  Text("This preference is a NOVA UI setting; it does not change Android CPU/GPU clocks.", color = Quiet, fontSize = 11.sp)
  }
 }
 
@@ -240,8 +233,8 @@ private fun SettingsScreen(dark: Boolean, setDark: (Boolean) -> Unit, profile: S
    }
   }
   HorizontalDivider()
-  Text("NOVA Preview 0.1.0", fontWeight = FontWeight.Bold)
-  Text("Windows/Wine/Box64, Linux userspace, guest GPU translation and embedded third-party windows are not yet implemented.", color = Quiet, fontSize = 12.sp)
+  Text("NOVA Preview 0.2.0", fontWeight = FontWeight.Bold)
+  Text("Windows/Linux execution and guest GPU translation remain unavailable until their native backends are packaged.", color = Quiet, fontSize = 12.sp)
  }
 }
 
