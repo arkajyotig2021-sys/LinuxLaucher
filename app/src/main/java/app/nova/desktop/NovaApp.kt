@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.documentfile.provider.DocumentFile
+import app.nova.desktop.files.FileManagerScreen
 import app.nova.desktop.graphics.GraphicsInfoCard
 import app.nova.desktop.runtime.RuntimeAppsScreen
 import java.util.Locale
@@ -52,7 +53,7 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
     }
     when (page) {
      "Home" -> HomeScreen(onFiles = { page = "Files" }, onOpen = { window = it })
-     "Files" -> FilesScreen(tree, chooseFolder)
+     "Files" -> FileManagerScreen(tree, chooseFolder)
      "Apps" -> RuntimeAppsScreen { window = it }
      "Performance" -> PerformanceScreen(profile) { profile = it }
      else -> SettingsScreen(dark, { dark = it }, profile, { profile = it })
