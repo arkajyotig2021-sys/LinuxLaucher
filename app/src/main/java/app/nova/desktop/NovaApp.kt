@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.documentfile.provider.DocumentFile
 import app.nova.desktop.files.FileManagerScreen
-import app.nova.desktop.graphics.GraphicsInfoCard
+import app.nova.desktop.runtime.GraphicsInfoCard
 import app.nova.desktop.runtime.RuntimeAppsScreen
 import java.util.Locale
 
