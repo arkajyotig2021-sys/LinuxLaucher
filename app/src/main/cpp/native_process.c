@@ -42,7 +42,11 @@ static char **read_string_array(JNIEnv *env, jobjectArray array, jsize *count) {
     if (!values) return NULL;
     for (jsize i = 0; i < *count; ++i) {
         jstring item = (jstring) (*env)->GetObjectArrayElement(env, array, i);
-        if (!item) { values[i] = NULL; continue; }
+        if (!item) {
+            values[i] = strdup("");
+            if (!values[i]) { for (jsize j=0;j<i;++j) free(values[j]); free(values); return NULL; }
+            continue;
+        }
         const char *utf = (*env)->GetStringUTFChars(env, item, NULL);
         if (!utf) {
             (*env)->DeleteLocalRef(env, item);
@@ -62,14 +66,14 @@ static char **read_string_array(JNIEnv *env, jobjectArray array, jsize *count) {
     return values;
 }
 
-static void free_string_array(char **values) {
+static void free_string_array(char **values, jsize count) {
     if (!values) return;
-    for (size_t i = 0; values[i] != NULL; ++i) free(values[i]);
+    for (jsize i = 0; i < count; ++i) free(values[i]);
     free(values);
 }
 
 static int stage_elf_in_memfd(const char *path) {
-#if defined(__aarch64__) && defined(__NR_memfd_create)
+#if defined(__NR_memfd_create)
     int source = open(path, O_RDONLY | O_CLOEXEC);
     if (source < 0) return -errno;
     int target = (int) syscall(__NR_memfd_create, "nova-guest-exec", MFD_CLOEXEC | MFD_ALLOW_SEALING);
@@ -129,14 +133,8 @@ Java_app_nova_desktop_runtime_NativeProcessLauncher_nativeStart(
     jsize argc = 0, envc = 0;
     char **argv = read_string_array(env, jArguments, &argc);
     char **envp = read_string_array(env, jEnvironment, &envc);
-    if (!argv || !envp) {
-        free_string_array(argv); free_string_array(envp);
-        (*env)->ReleaseStringUTFChars(env, jExecutable, executable);
-        (*env)->ReleaseStringUTFChars(env, jWorkingDirectory, working);
-        return -ENOMEM;
-    }
-    if (argc == 0 || argv[0] == NULL) {
-        free_string_array(argv); free_string_array(envp);
+    if (!argv || !envp || argc == 0 || argv[0] == NULL || argv[0][0] == '\0') {
+        free_string_array(argv, argc); free_string_array(envp, envc);
         (*env)->ReleaseStringUTFChars(env, jExecutable, executable);
         (*env)->ReleaseStringUTFChars(env, jWorkingDirectory, working);
         return -EINVAL;
@@ -147,7 +145,7 @@ Java_app_nova_desktop_runtime_NativeProcessLauncher_nativeStart(
         executableFd = stage_elf_in_memfd(executable);
         if (executableFd < 0) {
             int error = executableFd;
-            free_string_array(argv); free_string_array(envp);
+            free_string_array(argv, argc); free_string_array(envp, envc);
             (*env)->ReleaseStringUTFChars(env, jExecutable, executable);
             (*env)->ReleaseStringUTFChars(env, jWorkingDirectory, working);
             return error;
@@ -158,7 +156,7 @@ Java_app_nova_desktop_runtime_NativeProcessLauncher_nativeStart(
     if (child < 0) {
         int error = errno;
         if (executableFd >= 0) close(executableFd);
-        free_string_array(argv); free_string_array(envp);
+        free_string_array(argv, argc); free_string_array(envp, envc);
         (*env)->ReleaseStringUTFChars(env, jExecutable, executable);
         (*env)->ReleaseStringUTFChars(env, jWorkingDirectory, working);
         return -error;
@@ -167,7 +165,7 @@ Java_app_nova_desktop_runtime_NativeProcessLauncher_nativeStart(
     if (child == 0) {
         if (chdir(working) != 0) _exit(126);
         if (sdkInt >= 29) {
-#if defined(__aarch64__) && defined(__NR_execveat)
+#if defined(__NR_execveat)
             syscall(__NR_execveat, executableFd, "", argv, envp, AT_EMPTY_PATH);
 #else
             errno = ENOTSUP;
@@ -179,7 +177,7 @@ Java_app_nova_desktop_runtime_NativeProcessLauncher_nativeStart(
     }
 
     if (executableFd >= 0) close(executableFd);
-    free_string_array(argv); free_string_array(envp);
+    free_string_array(argv, argc); free_string_array(envp, envc);
     (*env)->ReleaseStringUTFChars(env, jExecutable, executable);
     (*env)->ReleaseStringUTFChars(env, jWorkingDirectory, working);
     return (jint) child;

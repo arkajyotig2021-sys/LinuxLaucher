@@ -19,12 +19,19 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           accept-android-sdk-licenses: true
-          packages: 'platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+          packages: 'platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1 system-images;android-35;google_apis;x86_64 emulator'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
       - name: Unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
+      - name: Android native process test
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          script: gradle --no-daemon :app:connectedDebugAndroidTest
       - name: Assemble APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify APK
@@ -44,6 +51,6 @@ jobs:
           body: |
             NOVA Android workspace preview APK.
             Includes the SAF file manager and Android app launch integration.
-            Native process launcher is an unverified runtime foundation; Wine/Box64 and Linux desktop runtimes are not included.
+            Native process launcher is a tested emulator foundation; Wine/Box64 and Linux desktop runtimes are not included.
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
