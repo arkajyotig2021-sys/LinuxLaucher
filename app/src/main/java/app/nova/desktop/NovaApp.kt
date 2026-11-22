@@ -1,0 +1,295 @@
+package app.nova.desktop
+
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.os.StatFs
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.documentfile.provider.DocumentFile
+import java.util.Locale
+
+private val NovaBlue = Color(0xFF596DE8)
+private val Quiet = Color(0xFF788196)
+
+@Composable
+fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
+ var page by remember { mutableStateOf("Home") }
+ var dark by remember { mutableStateOf(false) }
+ var profile by remember { mutableStateOf("Smooth") }
+ var window by remember { mutableStateOf<String?>(null) }
+ val colors = if (dark) darkColorScheme(primary = Color(0xFF9AA8FF)) else lightColorScheme(primary = NovaBlue)
+ MaterialTheme(colorScheme = colors) {
+  Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+   Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+     Column(Modifier.weight(1f)) {
+      Text("NOVA", fontSize = 12.sp, fontWeight = FontWeight.Black, color = NovaBlue)
+      Text(page, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+     }
+     IconButton(onClick = { dark = !dark }) { Icon(if (dark) Icons.Default.LightMode else Icons.Default.DarkMode, "Appearance") }
+    }
+    when (page) {
+     "Home" -> HomeScreen(onFiles = { page = "Files" }, onOpen = { window = it })
+     "Files" -> FilesScreen(tree, chooseFolder)
+     "Apps" -> AppsScreen { window = it }
+     "Performance" -> PerformanceScreen(profile) { profile = it }
+     else -> SettingsScreen(dark, { dark = it }, profile, { profile = it })
+    }
+    Spacer(Modifier.weight(1f))
+    NavigationBar {
+     listOf("Home", "Files", "Apps", "Performance", "Settings").forEach { name ->
+      NavigationBarItem(selected = page == name, onClick = { page = name }, icon = {
+       Icon(when(name) {
+        "Home" -> Icons.Default.Home
+        "Files" -> Icons.Default.Folder
+        "Apps" -> Icons.Default.Apps
+        "Performance" -> Icons.Default.Speed
+        else -> Icons.Default.Settings
+       }, contentDescription = name)
+      }, label = { Text(name, fontSize = 9.sp) })
+     }
+    }
+   }
+   window?.let { NovaWindow(it, onClose = { window = null }) }
+  }
+ }
+}
+
+@Composable
+private fun HomeScreen(onFiles: () -> Unit, onOpen: (String) -> Unit) {
+ val free = remember { runCatching { StatFs(Environment.getDataDirectory().path).availableBytes / (1024L * 1024 * 1024) }.getOrDefault(0L) }
+ val heap = Runtime.getRuntime().maxMemory() / (1024 * 1024)
+ LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 14.dp)) {
+  item {
+   Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF18233C)), shape = RoundedCornerShape(22.dp)) {
+    Column(Modifier.fillMaxWidth().padding(20.dp)) {
+     Text("A calmer way to compute.", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+     Text("A touch-first workspace for your Android device.", color = Color(0xFFD0D8EB), fontSize = 12.sp)
+     Spacer(Modifier.height(14.dp))
+     Button(onClick = onFiles) { Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(6.dp)); Text("Explore files") }
+    }
+   }
+  }
+  item { Text("Device snapshot", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+  item { Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+   Metric("Android", Build.VERSION.RELEASE ?: "Unknown", Modifier.weight(1f))
+   Metric("Free storage", free.toString() + " GB", Modifier.weight(1f))
+  } }
+  item { Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+   Metric("App heap cap", heap.toString() + " MB", Modifier.weight(1f))
+   Metric("CPU ABI", Build.SUPPORTED_ABIS.firstOrNull() ?: "Unknown", Modifier.weight(1f))
+  } }
+  item { Text("Workspace tools", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
+  item { ToolCard("NOVA Notes", "A simple writing window", Icons.Default.EditNote) { onOpen("Notes") } }
+  item { ToolCard("System Monitor", "App memory and processor snapshot", Icons.Default.Memory) { onOpen("System Monitor") } }
+  item {
+   Card(shape = RoundedCornerShape(17.dp)) {
+    Column(Modifier.padding(15.dp)) {
+     Text("Compatibility engines", fontWeight = FontWeight.Bold)
+     Text("Windows runtime: not integrated", color = Quiet, fontSize = 12.sp)
+     Text("Linux runtime: not integrated", color = Quiet, fontSize = 12.sp)
+     Text("This preview does not claim to run Windows or Linux desktop binaries.", color = Quiet, fontSize = 11.sp)
+    }
+   }
+  }
+ }
+}
+
+@Composable
+private fun FilesScreen(tree: Uri?, chooseFolder: () -> Unit) {
+ val context = LocalContext.current
+ var root by remember(tree) { mutableStateOf(tree?.let { DocumentFile.fromTreeUri(context, it) }) }
+ var current by remember(tree) { mutableStateOf(root) }
+ var refresh by remember { mutableIntStateOf(0) }
+ var makeFolder by remember { mutableStateOf(false) }
+ var folderName by remember { mutableStateOf("") }
+ var status by remember { mutableStateOf("") }
+ Column(Modifier.fillMaxSize()) {
+  Card(shape = RoundedCornerShape(17.dp)) {
+   Column(Modifier.padding(14.dp)) {
+    Text("Spatial Files", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    Text("Browse only the shared folder you explicitly approve with Android.", color = Quiet, fontSize = 11.sp)
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+     Button(onClick = chooseFolder) { Text(if (tree == null) "Choose folder" else "Change folder") }
+     if (root != null) OutlinedButton(onClick = { current = root }) { Text("Root") }
+    }
+   }
+  }
+  Spacer(Modifier.height(10.dp))
+  if (current != null) {
+   Row(verticalAlignment = Alignment.CenterVertically) {
+    Text(current?.name ?: "Selected folder", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+    IconButton(onClick = { makeFolder = true }) { Icon(Icons.Default.CreateNewFolder, "New folder") }
+    IconButton(onClick = { refresh++ }) { Icon(Icons.Default.Refresh, "Refresh") }
+   }
+   val list = remember(current, refresh) { runCatching { current!!.listFiles().sortedWith(compareByDescending<DocumentFile> { it.isDirectory }.thenBy { it.name ?: "" }) }.getOrDefault(emptyList()) }
+   LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    items(list, key = { it.uri.toString() }) { item ->
+     Card(shape = RoundedCornerShape(12.dp)) {
+      Row(Modifier.fillMaxWidth().clickable {
+       if (item.isDirectory) current = item else openFile(context, item)
+      }.padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+       Icon(if (item.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile, null, tint = NovaBlue)
+       Spacer(Modifier.width(10.dp))
+       Column(Modifier.weight(1f)) {
+        Text(item.name ?: "Unnamed", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(if (item.isDirectory) "Folder" else readableSize(item.length()), fontSize = 10.sp, color = Quiet)
+       }
+       IconButton(onClick = {
+        status = if (runCatching { item.delete() }.getOrDefault(false)) "Deleted" else "Android denied this operation"
+        refresh++
+       }) { Icon(Icons.Default.DeleteOutline, "Delete", tint = Quiet) }
+      }
+     }
+    }
+   }
+   if (list.isEmpty()) Text("This folder is empty.", color = Quiet, modifier = Modifier.padding(14.dp))
+  } else {
+   Spacer(Modifier.height(12.dp))
+   Text("Choose a folder to begin. NOVA will not request unrestricted storage access.", color = Quiet)
+  }
+  if (status.isNotEmpty()) Text(status, color = Quiet, fontSize = 11.sp)
+ }
+ if (makeFolder) {
+  AlertDialog(onDismissRequest = { makeFolder = false }, title = { Text("Create folder") }, text = {
+   OutlinedTextField(value = folderName, onValueChange = { folderName = it }, label = { Text("Folder name") })
+  }, confirmButton = {
+   TextButton(onClick = {
+    status = if (runCatching { current?.createDirectory(folderName.trim()) }.getOrNull() != null) "Folder created" else "Could not create folder"
+    folderName = ""; makeFolder = false; refresh++
+   }, enabled = folderName.isNotBlank()) { Text("Create") }
+  }, dismissButton = { TextButton(onClick = { makeFolder = false }) { Text("Cancel") } })
+ }
+}
+
+private fun openFile(context: Context, file: DocumentFile) {
+ val intent = Intent(Intent.ACTION_VIEW).apply {
+  setDataAndType(file.uri, context.contentResolver.getType(file.uri) ?: "*/*")
+  addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+ }
+ try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { }
+}
+private fun readableSize(bytes: Long): String = if (bytes > 1024L * 1024) String.format(Locale.getDefault(), "%.1f MB", bytes / (1024.0 * 1024)) else bytes.toString() + " bytes"
+
+@Composable
+private fun AppsScreen(open: (String) -> Unit) {
+ Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+  Text("Workspace tools", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+  ToolCard("NOVA Notes", "Local notes window", Icons.Default.EditNote) { open("Notes") }
+  ToolCard("System Monitor", "Live app memory snapshot", Icons.Default.Memory) { open("System Monitor") }
+  Text("Windows and Linux app execution is a future runtime milestone, not part of this preview.", color = Quiet, fontSize = 12.sp)
+ }
+}
+
+@Composable
+private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
+ val rt = Runtime.getRuntime()
+ val used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+ Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  Text("Resource overview", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+  Metric("App heap in use", used.toString() + " / " + (rt.maxMemory() / (1024 * 1024)) + " MB", Modifier.fillMaxWidth())
+  Metric("Available processors", rt.availableProcessors().toString(), Modifier.fillMaxWidth())
+  Text("Performance preference", fontWeight = FontWeight.SemiBold)
+  listOf("Smooth", "Balanced", "Battery Saver").forEach {
+   Card(Modifier.fillMaxWidth().clickable { setProfile(it) }) {
+    Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+     Text(it, modifier = Modifier.weight(1f))
+     if (profile == it) Icon(Icons.Default.CheckCircle, null, tint = NovaBlue)
+    }
+   }
+  }
+  Text("This preference is currently stored in the active screen state. It does not change Android CPU/GPU clocks or system scheduling.", color = Quiet, fontSize = 11.sp)
+ }
+}
+
+@Composable
+private fun SettingsScreen(dark: Boolean, setDark: (Boolean) -> Unit, profile: String, setProfile: (String) -> Unit) {
+ Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+  Text("Appearance", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+  Row(verticalAlignment = Alignment.CenterVertically) {
+   Text("Dark appearance", modifier = Modifier.weight(1f))
+   Switch(checked = dark, onCheckedChange = setDark)
+  }
+  HorizontalDivider()
+  Text("Performance profile: " + profile)
+  listOf("Smooth", "Balanced", "Battery Saver").forEach {
+   Row(verticalAlignment = Alignment.CenterVertically) {
+    RadioButton(selected = profile == it, onClick = { setProfile(it) })
+    Text(it)
+   }
+  }
+  HorizontalDivider()
+  Text("NOVA Preview 0.1.0", fontWeight = FontWeight.Bold)
+  Text("Windows/Wine/Box64, Linux userspace, guest GPU translation and embedded third-party windows are not yet implemented.", color = Quiet, fontSize = 12.sp)
+ }
+}
+
+@Composable
+private fun NovaWindow(name: String, onClose: () -> Unit) {
+ var note by remember { mutableStateOf("") }
+ Dialog(onDismissRequest = onClose) {
+  Card(shape = RoundedCornerShape(18.dp)) {
+   Column {
+    Row(Modifier.fillMaxWidth().background(Color(0xFF18233C)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+     Text(name, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+     IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
+    }
+    if (name == "Notes") {
+     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth().height(250.dp).padding(10.dp), placeholder = { Text("Start writing…") })
+    } else {
+     Column(Modifier.padding(18.dp)) {
+      val rt = Runtime.getRuntime()
+      Text("App heap used: " + ((rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)) + " MB")
+      Text("Heap cap: " + (rt.maxMemory() / (1024 * 1024)) + " MB")
+      Text("CPU cores: " + rt.availableProcessors())
+     }
+    }
+   }
+  }
+ }
+}
+
+@Composable
+private fun Metric(label: String, value: String, modifier: Modifier = Modifier) {
+ Card(modifier, shape = RoundedCornerShape(15.dp)) {
+  Column(Modifier.padding(14.dp)) {
+   Text(label, color = Quiet, fontSize = 10.sp)
+   Text(value, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+  }
+ }
+}
+
+@Composable
+private fun ToolCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+ Card(Modifier.fillMaxWidth().clickable(onClick = onClick), shape = RoundedCornerShape(15.dp)) {
+  Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+   Icon(icon, null, tint = NovaBlue)
+   Spacer(Modifier.width(12.dp))
+   Column {
+    Text(title, fontWeight = FontWeight.SemiBold)
+    Text(subtitle, color = Quiet, fontSize = 11.sp)
+   }
+  }
+ }
+}
