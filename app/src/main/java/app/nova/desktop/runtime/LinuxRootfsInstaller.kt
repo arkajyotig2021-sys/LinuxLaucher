@@ -32,7 +32,7 @@ class LinuxRootfsInstaller {
                     val entry = tar.nextTarEntry ?: break
                     val raw = entry.name.replace('\\', '/')
                     require(!raw.startsWith("/") && raw.split('/').none { it == ".." }) { "Unsafe path in rootfs archive." }
-                    val relative = raw.trimStart('./').trimEnd('/')
+                    val relative = raw.trimStart('.', '/').trimEnd('/')
                     if (relative.isEmpty()) continue
                     val target = File(staging, relative)
                     val targetParent = target.parentFile ?: throw IOException("Invalid archive path.")
@@ -52,7 +52,7 @@ class LinuxRootfsInstaller {
                             val linkTarget = if (link.startsWith("/")) File(staging, link.removePrefix("/")) else File(targetParent, link)
                             require(linkTarget.canonicalFile.toPath().startsWith(rootCanonical.toPath())) { "Symbolic link escapes rootfs." }
                             val relativeLink = targetParent.toPath().relativize(linkTarget.toPath()).toString()
-                            if (target.exists() || target.isSymbolicLink()) target.delete()
+                            if (target.exists() || java.nio.file.Files.isSymbolicLink(target.toPath())) target.delete()
                             Os.symlink(relativeLink, target.absolutePath)
                         }
                         entry.isLink -> {
@@ -62,7 +62,14 @@ class LinuxRootfsInstaller {
                             Os.link(link.absolutePath, target.absolutePath)
                         }
                         entry.isFile -> {
-                            FileOutputStream(target).use { output -> tar.copyTo(output) }
+                            FileOutputStream(target).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val count = tar.read(buffer)
+                                    if (count < 0) break
+                                    output.write(buffer, 0, count)
+                                }
+                            }
                             target.setExecutable((entry.mode and 0b001001001) != 0, false)
                             target.setReadable((entry.mode and 0b100100100) != 0, false)
                             target.setWritable((entry.mode and 0b010010010) != 0, false)
