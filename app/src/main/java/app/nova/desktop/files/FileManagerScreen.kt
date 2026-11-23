@@ -39,6 +39,7 @@ fun FileManagerScreen(tree: Uri?, chooseFolder: () -> Unit) {
     var dialog by remember { mutableStateOf(FileDialog.NONE) }
     var name by remember { mutableStateOf("") }
     var target by remember { mutableStateOf<DocumentFile?>(null) }
+    var previewTarget by remember { mutableStateOf<DocumentFile?>(null) }
     var status by remember { mutableStateOf("") }
     val selected = remember { mutableStateListOf<String>() }
     var clipboard by remember { mutableStateOf<List<DocumentFile>>(emptyList()) }
@@ -199,7 +200,7 @@ fun FileManagerScreen(tree: Uri?, chooseFolder: () -> Unit) {
                                 Modifier.fillMaxWidth().clickable {
                                     if (selected.isNotEmpty()) {
                                         if (isSelected) selected.remove(item.uri.toString()) else selected.add(item.uri.toString())
-                                    } else if (item.isDirectory) navigate(item) else openDocument(item)
+                                    } else if (item.isDirectory) navigate(item) else if (isPreviewable(context.contentResolver.getType(item.uri))) previewTarget = item else openDocument(item)
                                 }.padding(horizontal = 10.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -245,6 +246,9 @@ fun FileManagerScreen(tree: Uri?, chooseFolder: () -> Unit) {
                                             runCatching { context.startActivity(Intent.createChooser(ops.shareIntent(item), "Share file")) }
                                                 .onFailure { status = "Sharing failed: " + it.message }
                                         })
+                                        DropdownMenuItem(text = { Text("Preview") }, leadingIcon = { Icon(Icons.Default.Visibility, null) }, onClick = {
+                                            previewTarget = item; menu = false
+                                        })
                                         DropdownMenuItem(text = { Text("Details") }, leadingIcon = { Icon(Icons.Default.Info, null) }, onClick = {
                                             target = item; dialog = FileDialog.DETAILS; menu = false
                                         })
@@ -263,6 +267,8 @@ fun FileManagerScreen(tree: Uri?, chooseFolder: () -> Unit) {
             Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
+
+    previewTarget?.let { file -> FilePreviewDialog(file) { previewTarget = null } }
 
     when (dialog) {
         FileDialog.NEW_FOLDER, FileDialog.NEW_FILE, FileDialog.RENAME -> {
@@ -340,3 +346,5 @@ private fun formatBytes(value: Long): String = when {
     value < 1024L * 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f MB", value / (1024.0 * 1024))
     else -> String.format(Locale.getDefault(), "%.2f GB", value / (1024.0 * 1024 * 1024))
 }
+
+private fun isPreviewable(mime: String?): Boolean = mime?.let { it.startsWith("text/") || it.startsWith("image/") || it.startsWith("audio/") || it.startsWith("video/") || it == "application/pdf" || it in setOf("application/json", "application/xml", "application/javascript") } == true
