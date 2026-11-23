@@ -37,10 +37,7 @@ class LinuxRootfsInstaller {
                     val target = File(staging, relative)
                     val targetParent = target.parentFile ?: throw IOException("Invalid archive path.")
                     if (!targetParent.exists() && !targetParent.mkdirs()) throw IOException("Cannot create rootfs directory.")
-                    require(targetParent.canonicalFile.toPath().startsWith(rootCanonical.toPath())) { "Archive path escapes rootfs." }
-                    require(!targetParent.canonicalFile.toPath().any { it.toFile().isFile && it.toFile().canonicalFile != it.toFile() }) {
-                        "Archive attempts to traverse a symbolic link."
-                    }
+                    require(isInside(rootCanonical, targetParent.canonicalFile)) { "Archive path escapes rootfs." }
 
                     when {
                         entry.isDirectory -> {
@@ -50,14 +47,14 @@ class LinuxRootfsInstaller {
                         entry.isSymbolicLink -> {
                             val link = entry.linkName.replace('\\', '/')
                             val linkTarget = if (link.startsWith("/")) File(staging, link.removePrefix("/")) else File(targetParent, link)
-                            require(linkTarget.canonicalFile.toPath().startsWith(rootCanonical.toPath())) { "Symbolic link escapes rootfs." }
-                            val relativeLink = targetParent.toPath().relativize(linkTarget.toPath()).toString()
-                            if (target.exists() || java.nio.file.Files.isSymbolicLink(target.toPath())) target.delete()
+                            require(isInside(rootCanonical, linkTarget.canonicalFile)) { "Symbolic link escapes rootfs." }
+                            val relativeLink = relativePath(targetParent, linkTarget)
+                            if (target.exists()) target.delete()
                             Os.symlink(relativeLink, target.absolutePath)
                         }
                         entry.isLink -> {
                             val link = File(staging, entry.linkName.removePrefix("/"))
-                            require(link.canonicalFile.toPath().startsWith(rootCanonical.toPath()) && link.isFile) { "Invalid rootfs hard link." }
+                            require(isInside(rootCanonical, link.canonicalFile) && link.isFile) { "Invalid rootfs hard link." }
                             if (target.exists()) target.delete()
                             Os.link(link.absolutePath, target.absolutePath)
                         }
@@ -87,6 +84,22 @@ class LinuxRootfsInstaller {
             staging.deleteRecursively()
             throw error
         }
+    }
+
+    private fun isInside(root: File, candidate: File): Boolean {
+        val base = root.canonicalPath
+        val path = candidate.canonicalPath
+        return path == base || path.startsWith(base + File.separator)
+    }
+
+    private fun relativePath(from: File, to: File): String {
+        val fromParts = from.canonicalPath.split(File.separatorChar).filter { it.isNotEmpty() }
+        val toParts = to.canonicalPath.split(File.separatorChar).filter { it.isNotEmpty() }
+        var common = 0
+        while (common < minOf(fromParts.size, toParts.size) && fromParts[common] == toParts[common]) common++
+        val up = List(fromParts.size - common) { ".." }
+        val down = toParts.drop(common)
+        return (up + down).joinToString(File.separator).ifEmpty { "." }
     }
 
     private fun sha256(file: File): String {

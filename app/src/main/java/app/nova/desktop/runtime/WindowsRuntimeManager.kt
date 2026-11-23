@@ -68,7 +68,7 @@ class WindowsRuntimeManager(context: Context) {
         require(prefix.exists() || prefix.mkdirs()) { "Cannot create Wine prefix." }
         val isMsi = stagedInstaller.extension.equals("msi", true)
         val args = if (isMsi) listOf("msiexec", "/i", stagedInstaller.absolutePath) else listOf(stagedInstaller.absolutePath)
-        return ProcessBuilder(listOf(backend.box64!!.absolutePath, backend.wine!!.absolutePath) + args)
+        return ProcessBuilder((listOf(backend.box64!!.absolutePath, backend.wine!!.absolutePath) + args).toMutableList())
             .directory(prefix)
             .redirectErrorStream(true)
             .apply {

@@ -87,7 +87,7 @@ private fun loadPreview(context: Context, uri: Uri, mime: String?, bytes: Long):
                     }
                     output.toByteArray()
                 } ?: error("Cannot open this document.")
-                PreviewContent.Text(data.toString(Charsets.UTF_8) + if (bytes > data.size) "\n\n— Preview truncated —" else "")
+                PreviewContent.Text(data.toString(Charsets.UTF_8) + if (bytes > data.size.toLong()) "\n\n— Preview truncated —" else "")
             }
             type.startsWith("image/") -> {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

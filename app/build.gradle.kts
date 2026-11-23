@@ -34,6 +34,7 @@ dependencies {
  implementation("androidx.compose.material:material-icons-extended")
  implementation("androidx.documentfile:documentfile:1.0.1")
  implementation("org.apache.commons:commons-compress:1.27.1")
+ implementation("commons-io:commons-io:2.17.0")
  debugImplementation("androidx.compose.ui:ui-tooling")
  testImplementation("junit:junit:4.13.2")
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
