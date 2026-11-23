@@ -36,6 +36,7 @@ import app.nova.desktop.runtime.GraphicsInfoCard
 import app.nova.desktop.runtime.RuntimeAppsScreen
 import app.nova.desktop.runtime.DesktopWindowFrame
 import app.nova.desktop.runtime.DesktopWindowState
+import app.nova.desktop.runtime.AdaptivePerformanceController
 import java.util.Locale
 
 private val NovaBlue = Color(0xFF596DE8)
@@ -262,6 +263,7 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
   }
  }
  val used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
+ val policy = remember(profile, availableRamMb, thermal) { AdaptivePerformanceController.evaluate(profile, availableRamMb, thermal) }
  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
   Text("Live resource overview", fontSize = 18.sp, fontWeight = FontWeight.Bold)
   Metric("NOVA app CPU (approx.)", String.format(Locale.getDefault(), "%.1f%%", appCpuPercent), Modifier.fillMaxWidth())
@@ -269,6 +271,10 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
   Metric("App heap in use", used.toString() + " / " + (rt.maxMemory() / (1024 * 1024)) + " MB", Modifier.fillMaxWidth())
   Metric("System available RAM", "$availableRamMb MB", Modifier.fillMaxWidth())
   Metric("Thermal status", thermal, Modifier.fillMaxWidth())
+  Metric("Effective performance mode", policy.effectiveProfile, Modifier.fillMaxWidth())
+  Metric("Background worker limit", policy.maxBackgroundWorkers.toString(), Modifier.fillMaxWidth())
+  Metric("Preview resolution limit", policy.previewMaxDimensionPx.toString() + " px", Modifier.fillMaxWidth())
+  Text(policy.reason, color = Quiet, fontSize = 11.sp)
   Metric("Available processors", rt.availableProcessors().toString(), Modifier.fillMaxWidth())
   GraphicsInfoCard()
   Text("Performance preference", fontWeight = FontWeight.SemiBold)
@@ -280,7 +286,7 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
     }
    }
   }
-  Text("Metrics refresh every 2 seconds. CPU is this app's process usage, not total device CPU. The profile is currently a preference only; Android does not expose general CPU/GPU clock control to ordinary apps.", color = Quiet, fontSize = 11.sp)
+  Text("Metrics refresh every 2 seconds. CPU is this app's process usage, not total device CPU. NOVA adapts background-work and preview budgets from available RAM and thermal state; Android does not expose general CPU/GPU clock control to ordinary apps.", color = Quiet, fontSize = 11.sp)
  } 
 }
 

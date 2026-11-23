@@ -1,6 +1,7 @@
 package app.nova.desktop.files
 
 import android.content.Context
+import android.app.ActivityManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfRenderer
@@ -91,8 +92,10 @@ private fun loadPreview(context: Context, uri: Uri, mime: String?, bytes: Long):
             type.startsWith("image/") -> {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                val memory = ActivityManager.MemoryInfo().also { info -> (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(info) }
+                val maxDimension = when { memory.availMem < 600L * 1024 * 1024 -> 800; memory.availMem < 1000L * 1024 * 1024 -> 1200; else -> 1600 }
                 var sample = 1
-                while (bounds.outWidth / sample > 1600 || bounds.outHeight / sample > 1600) sample *= 2
+                while (bounds.outWidth / sample > maxDimension || bounds.outHeight / sample > maxDimension) sample *= 2
                 val options = BitmapFactory.Options().apply { inSampleSize = sample.coerceAtLeast(1) }
                 val bitmap = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
                     ?: error("Image decoding failed.")
