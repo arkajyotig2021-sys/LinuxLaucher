@@ -19,6 +19,9 @@ class LinuxRuntimeManager(context: Context) {
     private val ociRootfs = File(prefix, "var/lib/pr/containers/alpine/rootfs")
 
     fun status(): LinuxInstallStatus {
+        if (Build.VERSION.SDK_INT < 28) {
+            return LinuxInstallStatus(LinuxInstallState.UNSUPPORTED, "The bundled PRoot engine requires Android 9 (API 28) or newer.")
+        }
         if (Build.SUPPORTED_ABIS.none { it == "arm64-v8a" }) {
             return LinuxInstallStatus(LinuxInstallState.UNSUPPORTED, "The bundled PRoot runtime currently supports ARM64 only.")
         }
@@ -58,6 +61,7 @@ class LinuxRuntimeManager(context: Context) {
     }
 
     private fun createLauncher(): ProotLauncher {
+        require(Build.VERSION.SDK_INT >= 28) { "The bundled PRoot engine requires Android 9 (API 28) or newer." }
         require(Build.SUPPORTED_ABIS.any { it == "arm64-v8a" }) { "The Linux runtime is ARM64-only in this preview." }
         val nativeDir = File(app.applicationInfo.nativeLibraryDir)
         val cli = File(nativeDir, "libpr-cli.so")
