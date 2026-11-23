@@ -18,9 +18,10 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
     val launcher = remember(context) { ExternalAppLauncher(context) }
     val apps = remember(context) { runCatching { launcher.installedLaunchableApps() }.getOrDefault(emptyList()) }
     val windows = remember { UnavailableGuestRuntime(RuntimeKind.WINDOWS).status(context) }
-    val linux = remember { UnavailableGuestRuntime(RuntimeKind.LINUX).status(context) }
+    val linux = remember(context) { LinuxRuntimeManager(context) }.status()
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
+        item { LinuxRuntimeCard() }
         item {
             Text("NOVA workspace", style = MaterialTheme.typography.titleLarge)
             Card {
