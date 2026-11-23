@@ -37,7 +37,7 @@ class LinuxRuntimeManager(context: Context) {
 
     fun startInstall(): ProotLauncher.Session {
         val launcher = createLauncher()
-        return launcher.runCommand(listOf("install", "alpine"))
+        return launcher.runCommand(listOf("install", "docker.io/library/alpine:latest", "--override-alias", "alpine"))
             ?: error("Could not start the Alpine installer PTY.")
     }
 
