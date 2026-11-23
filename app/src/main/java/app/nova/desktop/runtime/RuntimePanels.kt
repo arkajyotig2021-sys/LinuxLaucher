@@ -1,6 +1,11 @@
 package app.nova.desktop.runtime
 
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -17,7 +22,18 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
     val context = LocalContext.current
     val launcher = remember(context) { ExternalAppLauncher(context) }
     val apps = remember(context) { runCatching { launcher.installedLaunchableApps() }.getOrDefault(emptyList()) }
-    val windows = remember { UnavailableGuestRuntime(RuntimeKind.WINDOWS).status(context) }
+    val windowsManager = remember(context) { WindowsRuntimeManager(context) }
+    val windows = windowsManager.status()
+    val scope = rememberCoroutineScope()
+    var selectedInstaller by remember { mutableStateOf<java.io.File?>(null) }
+    var installerStatus by remember { mutableStateOf("") }
+    val installerPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            runCatching { withContext(Dispatchers.IO) { windowsManager.stageInstaller(uri) } }
+                .onSuccess { selectedInstaller = it; installerStatus = "Staged: ${it.name} · SHA-256 ${withContext(Dispatchers.IO) { windowsManager.installerSha256(it) }}" }
+                .onFailure { installerStatus = it.message ?: "Could not stage installer." }
+        }
+    }
     val linux = remember(context) { LinuxRuntimeManager(context) }.status()
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
@@ -28,6 +44,9 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                 Column(Modifier.padding(14.dp)) {
                     Text("Windows compatibility", style = MaterialTheme.typography.titleMedium)
                     Text(windows.detail, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { installerPicker.launch(arrayOf("application/vnd.microsoft.portable-executable", "application/x-msdownload", "application/octet-stream")) }) { Text("Select EXE/MSI installer") }
+                    selectedInstaller?.let { Text("Selected: ${it.name}", style = MaterialTheme.typography.bodySmall) }
+                    if (installerStatus.isNotBlank()) Text(installerStatus, style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(8.dp))
                     Text("Linux desktop runtime", style = MaterialTheme.typography.titleMedium)
                     Text(linux.detail, style = MaterialTheme.typography.bodySmall)
