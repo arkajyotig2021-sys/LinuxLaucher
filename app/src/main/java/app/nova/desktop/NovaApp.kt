@@ -34,6 +34,8 @@ import androidx.documentfile.provider.DocumentFile
 import app.nova.desktop.files.FileManagerScreen
 import app.nova.desktop.runtime.GraphicsInfoCard
 import app.nova.desktop.runtime.RuntimeAppsScreen
+import app.nova.desktop.runtime.DesktopWindowFrame
+import app.nova.desktop.runtime.DesktopWindowState
 import java.util.Locale
 
 private val NovaBlue = Color(0xFF596DE8)
@@ -52,7 +54,8 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
    .putString("performance_profile", profile)
    .apply()
  }
- var window by remember { mutableStateOf<String?>(null) }
+ var windows by remember { mutableStateOf(listOf<DesktopWindowState>()) }
+ fun openWindow(title: String) { windows = windows.filterNot { it.title == title } + DesktopWindowState(title = title) }
  val colors = if (dark) darkColorScheme(primary = Color(0xFF9AA8FF)) else lightColorScheme(primary = NovaBlue)
  MaterialTheme(colorScheme = colors) {
   Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -65,9 +68,9 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
      IconButton(onClick = { dark = !dark }) { Icon(if (dark) Icons.Default.LightMode else Icons.Default.DarkMode, "Appearance") }
     }
     when (page) {
-     "Home" -> HomeScreen(onFiles = { page = "Files" }, onOpen = { window = it })
+     "Home" -> HomeScreen(onFiles = { page = "Files" }, onOpen = { openWindow(it) })
      "Files" -> FileManagerScreen(tree, chooseFolder)
-     "Apps" -> RuntimeAppsScreen { window = it }
+     "Apps" -> RuntimeAppsScreen { openWindow(it) }
      "Performance" -> PerformanceScreen(profile) { profile = it }
      else -> SettingsScreen(dark, { dark = it }, profile, { profile = it })
     }
@@ -86,7 +89,17 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
      }
     }
    }
-   window?.let { NovaWindow(it, onClose = { window = null }) }
+   windows.forEachIndexed { index, item ->
+    DesktopWindowFrame(
+     state = item,
+     layer = index.toFloat() + 1f,
+     onChange = { updated -> windows = windows.map { if (it.id == updated.id) updated else it } },
+     onFocus = { windows = windows.filterNot { it.id == item.id } + item },
+     onMinimize = { windows = windows.map { if (it.id == item.id) it.copy(minimized = true) else it } },
+     onMaximize = { windows = windows.map { if (it.id == item.id) it.copy(maximized = !it.maximized) else it } },
+     onClose = { windows = windows.filterNot { it.id == item.id } }
+    ) { NovaWindowContent(item.title) }
+   }
   }
  }
 }
@@ -294,31 +307,24 @@ private fun SettingsScreen(dark: Boolean, setDark: (Boolean) -> Unit, profile: S
 }
 
 @Composable
-private fun NovaWindow(name: String, onClose: () -> Unit) {
+private fun NovaWindowContent(name: String) {
  val context = LocalContext.current
  val preferences = remember(context) { context.getSharedPreferences("nova", Context.MODE_PRIVATE) }
  var note by remember { mutableStateOf(preferences.getString("notes_document", "") ?: "") }
  LaunchedEffect(note) {
   if (name == "Notes") preferences.edit().putString("notes_document", note).apply()
  }
- Dialog(onDismissRequest = onClose) {
-  Card(shape = RoundedCornerShape(18.dp)) {
-   Column {
-    Row(Modifier.fillMaxWidth().background(Color(0xFF18233C)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-     Text(name, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-     IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Close", tint = Color.White) }
-    }
-    if (name == "Notes") {
-     OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxWidth().height(250.dp).padding(10.dp), placeholder = { Text("Start writing…") })
-    } else {
-     Column(Modifier.padding(18.dp)) {
-      val rt = Runtime.getRuntime()
-      Text("App heap used: " + ((rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)) + " MB")
-      Text("Heap cap: " + (rt.maxMemory() / (1024 * 1024)) + " MB")
-      Text("CPU cores: " + rt.availableProcessors())
-     }
-    }
-   }
+ if (name == "Notes") {
+  OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxSize(),
+   placeholder = { Text("Start writing…") })
+ } else {
+  val rt = Runtime.getRuntime()
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+   Text("NOVA process monitor", fontWeight = FontWeight.Bold)
+   Text("App heap used: " + ((rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)) + " MB")
+   Text("Heap cap: " + (rt.maxMemory() / (1024 * 1024)) + " MB")
+   Text("CPU cores: " + rt.availableProcessors())
+   Text("Open the Performance page for live CPU, memory and thermal readings.")
   }
  }
 }
