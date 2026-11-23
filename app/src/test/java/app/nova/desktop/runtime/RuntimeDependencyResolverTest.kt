@@ -14,7 +14,7 @@ class RuntimeDependencyResolverTest {
         assertEquals(listOf("engine", "guest"), resolver.resolve("guest", "arm64-v8a").map { it.id })
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test(expected = IllegalStateException::class)
     fun missingDependencyIsRejected() {
         RuntimeDependencyResolver(mapOf("guest" to item("guest", listOf("missing")))).resolve("guest", "arm64-v8a")
     }
