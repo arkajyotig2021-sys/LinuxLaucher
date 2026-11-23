@@ -100,6 +100,11 @@ fun GraphicsInfoCard() {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Graphics capability", style = MaterialTheme.typography.titleMedium)
             Text("OpenGL ES: " + caps.openGlesVersion)
+            Text("GPU renderer: " + caps.renderer)
+            Text("GPU vendor: " + caps.vendor)
+            Text("Driver: " + caps.driverVersion)
+            Text("Mali GPU detected: " + if (caps.isMali) "yes" else "no")
+            Text("Guest GPU translation: " + if (caps.guestTranslationAvailable) "available" else "not implemented")
             Text("Vulkan hardware feature: " + if (caps.vulkanSupported) "available" else "not reported")
             Text("Supported ABI: " + caps.supportedAbis.joinToString())
             Text(caps.note, style = MaterialTheme.typography.bodySmall)
