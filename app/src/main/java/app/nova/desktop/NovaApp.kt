@@ -37,6 +37,8 @@ import app.nova.desktop.runtime.RuntimeAppsScreen
 import app.nova.desktop.runtime.DesktopWindowFrame
 import app.nova.desktop.runtime.DesktopWindowState
 import app.nova.desktop.runtime.AdaptivePerformanceController
+import app.nova.desktop.runtime.LinuxTerminalScreen
+import app.nova.desktop.runtime.LinuxTerminalMode
 import java.util.Locale
 
 private val NovaBlue = Color(0xFF596DE8)
@@ -329,7 +331,11 @@ private fun NovaWindowContent(name: String) {
  LaunchedEffect(note) {
   if (name == "Notes") preferences.edit().putString("notes_document", note).apply()
  }
- if (name == "Notes") {
+ if (name == "Linux Installer") {
+  LinuxTerminalScreen(LinuxTerminalMode.INSTALL)
+ } else if (name == "Linux Terminal") {
+  LinuxTerminalScreen(LinuxTerminalMode.LOGIN)
+ } else if (name == "Notes") {
   OutlinedTextField(value = note, onValueChange = { note = it }, modifier = Modifier.fillMaxSize(),
    placeholder = { Text("Start writing…") })
  } else {

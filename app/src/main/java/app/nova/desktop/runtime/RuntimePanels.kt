@@ -34,10 +34,9 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                 .onFailure { installerStatus = it.message ?: "Could not stage installer." }
         }
     }
-    val linux = remember(context) { LinuxRuntimeManager(context) }.status()
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 18.dp)) {
-        item { LinuxRuntimeCard() }
+        item { LinuxRuntimeCard(onInstall = { openBuiltIn("Linux Installer") }, onOpenTerminal = { openBuiltIn("Linux Terminal") }) }
         item {
             Text("NOVA workspace", style = MaterialTheme.typography.titleLarge)
             Card {
@@ -64,9 +63,7 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                         }
                     }
                     if (installerStatus.isNotBlank()) Text(installerStatus, style = MaterialTheme.typography.labelSmall)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Linux desktop runtime", style = MaterialTheme.typography.titleMedium)
-                    Text(linux.detail, style = MaterialTheme.typography.bodySmall)
+
                 }
             }
         }
