@@ -89,6 +89,15 @@ fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
       }, label = { Text(name, fontSize = 9.sp) })
      }
     }
+    val minimizedWindows = windows.filter { it.minimized }
+    if (minimizedWindows.isNotEmpty()) {
+     Row(Modifier.fillMaxWidth().heightIn(min = 34.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      minimizedWindows.forEach { minimized ->
+       AssistChip(onClick = { windows = windows.map { if (it.id == minimized.id) it.copy(minimized = false) else it } },
+        label = { Text(minimized.title, maxLines = 1) })
+      }
+     }
+    }
    }
    windows.forEachIndexed { index, item ->
     DesktopWindowFrame(
@@ -136,9 +145,9 @@ private fun HomeScreen(onFiles: () -> Unit, onOpen: (String) -> Unit) {
    Card(shape = RoundedCornerShape(17.dp)) {
     Column(Modifier.padding(15.dp)) {
      Text("Compatibility engines", fontWeight = FontWeight.Bold)
-     Text("Windows: native runtime not bundled", color = Quiet, fontSize = 12.sp)
-     Text("Linux: userspace not bundled", color = Quiet, fontSize = 12.sp)
-     Text("This build does not claim Windows or Linux binary execution.", color = Quiet, fontSize = 11.sp)
+     Text("Windows: Wine/Box64 backend not bundled", color = Quiet, fontSize = 12.sp)
+     Text("Linux: Alpine rootfs installer added; PRoot execution backend pending", color = Quiet, fontSize = 12.sp)
+     Text("Rootfs installation does not yet mean Linux applications can execute. Windows execution is not available yet.", color = Quiet, fontSize = 11.sp)
     }
    }
   }
@@ -307,7 +316,7 @@ private fun SettingsScreen(dark: Boolean, setDark: (Boolean) -> Unit, profile: S
    }
   }
   HorizontalDivider()
-  Text("NOVA Preview 0.2.0", fontWeight = FontWeight.Bold)
+  Text("NOVA Preview 0.3.0", fontWeight = FontWeight.Bold)
   Text("Windows/Linux execution and guest GPU translation remain unavailable until their native backends are packaged.", color = Quiet, fontSize = 12.sp)
  }
 }

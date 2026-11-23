@@ -25,7 +25,12 @@ fun LinuxRuntimeCard() {
         val id = downloadId ?: return@LaunchedEffect
         while (true) {
             val progress = withContext(Dispatchers.IO) { manager.inspect(id) }
-            if (progress.state == VerifiedDownloadState.VERIFIED || progress.state == VerifiedDownloadState.FAILED || progress.state == VerifiedDownloadState.MISSING) break
+            if (progress.state == VerifiedDownloadState.FAILED || progress.state == VerifiedDownloadState.MISSING) {
+                status = LinuxInstallStatus(LinuxInstallState.FAILED, progress.detail.ifBlank { "Download failed or disappeared." })
+                downloadId = null
+                break
+            }
+            if (progress.state == VerifiedDownloadState.VERIFIED) break
             if (progress.state == VerifiedDownloadState.VERIFYING) {
                 busy = true
                 status = LinuxInstallStatus(LinuxInstallState.EXTRACTING, "Verifying and extracting Alpine rootfs…", id, 100)

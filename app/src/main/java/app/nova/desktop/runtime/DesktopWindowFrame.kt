@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -42,6 +43,7 @@ fun DesktopWindowFrame(
 ) {
     if (state.minimized) return
     BoxWithConstraints(Modifier.fillMaxSize()) {
+        val density = LocalDensity.current.density
         val width = if (state.maximized) maxWidth else state.width.dp.coerceAtMost(maxWidth).coerceAtLeast(240.dp)
         val height = if (state.maximized) maxHeight else state.height.dp.coerceAtMost(maxHeight).coerceAtLeast(180.dp)
         val x = if (state.maximized) 0.dp else state.x.dp.coerceIn(0.dp, (maxWidth - width).coerceAtLeast(0.dp))
@@ -59,8 +61,8 @@ fun DesktopWindowFrame(
                             change.consume()
                             onFocus()
                             if (!state.maximized) onChange(state.copy(
-                                x = (state.x + drag.x).coerceAtLeast(0f),
-                                y = (state.y + drag.y).coerceAtLeast(0f)
+                                x = (state.x + drag.x / density).coerceAtLeast(0f),
+                                y = (state.y + drag.y / density).coerceAtLeast(0f)
                             ))
                         }
                     },
@@ -80,8 +82,8 @@ fun DesktopWindowFrame(
                             change.consume()
                             onFocus()
                             if (!state.maximized) onChange(state.copy(
-                                width = (state.width + drag.x).coerceIn(240f, 900f),
-                                height = (state.height + drag.y).coerceIn(180f, 1000f)
+                                width = (state.width + drag.x / density).coerceIn(240f, 900f),
+                                height = (state.height + drag.y / density).coerceIn(180f, 1000f)
                             ))
                         }
                     },
