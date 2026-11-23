@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Debug
+import android.os.PowerManager
+import android.os.SystemClock
+import android.app.ActivityManager
 import android.os.Environment
 import android.os.StatFs
 import androidx.compose.foundation.background
@@ -17,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -205,11 +210,52 @@ private fun readableSize(bytes: Long): String = if (bytes > 1024L * 1024) String
 
 @Composable
 private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
+ val context = LocalContext.current
  val rt = Runtime.getRuntime()
+ var appCpuPercent by remember { mutableFloatStateOf(0f) }
+ var appPssMb by remember { mutableIntStateOf(0) }
+ var availableRamMb by remember { mutableIntStateOf(0) }
+ var thermal by remember { mutableStateOf("Not available") }
+ LaunchedEffect(context) {
+  var previousCpu = android.os.Process.getElapsedCpuTime()
+  var previousWall = SystemClock.elapsedRealtime()
+  while (true) {
+   delay(2000)
+   val currentCpu = android.os.Process.getElapsedCpuTime()
+   val currentWall = SystemClock.elapsedRealtime()
+   val cpuDelta = (currentCpu - previousCpu).coerceAtLeast(0L)
+   val wallDelta = (currentWall - previousWall).coerceAtLeast(1L)
+   appCpuPercent = ((cpuDelta.toFloat() / wallDelta.toFloat()) * 100f).coerceIn(0f, 100f)
+   previousCpu = currentCpu
+   previousWall = currentWall
+   appPssMb = Debug.getPss() / 1024
+   val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+   val memory = ActivityManager.MemoryInfo()
+   manager.getMemoryInfo(memory)
+   availableRamMb = (memory.availMem / (1024L * 1024L)).toInt()
+   val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+   thermal = if (Build.VERSION.SDK_INT >= 29) {
+    when (power.currentThermalStatus) {
+     PowerManager.THERMAL_STATUS_NONE -> "Normal"
+     PowerManager.THERMAL_STATUS_LIGHT -> "Light"
+     PowerManager.THERMAL_STATUS_MODERATE -> "Moderate"
+     PowerManager.THERMAL_STATUS_SEVERE -> "Severe"
+     PowerManager.THERMAL_STATUS_CRITICAL -> "Critical"
+     PowerManager.THERMAL_STATUS_EMERGENCY -> "Emergency"
+     PowerManager.THERMAL_STATUS_SHUTDOWN -> "Shutdown"
+     else -> "Unknown"
+    }
+   } else "Android API below 29"
+  }
+ }
  val used = (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024)
  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-  Text("Resource overview", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+  Text("Live resource overview", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+  Metric("NOVA app CPU (approx.)", String.format(Locale.getDefault(), "%.1f%%", appCpuPercent), Modifier.fillMaxWidth())
+  Metric("App memory (PSS)", "$appPssMb MB", Modifier.fillMaxWidth())
   Metric("App heap in use", used.toString() + " / " + (rt.maxMemory() / (1024 * 1024)) + " MB", Modifier.fillMaxWidth())
+  Metric("System available RAM", "$availableRamMb MB", Modifier.fillMaxWidth())
+  Metric("Thermal status", thermal, Modifier.fillMaxWidth())
   Metric("Available processors", rt.availableProcessors().toString(), Modifier.fillMaxWidth())
   GraphicsInfoCard()
   Text("Performance preference", fontWeight = FontWeight.SemiBold)
@@ -221,8 +267,8 @@ private fun PerformanceScreen(profile: String, setProfile: (String) -> Unit) {
     }
    }
   }
-  Text("This preference is a NOVA UI setting; it does not change Android CPU/GPU clocks.", color = Quiet, fontSize = 11.sp)
- }
+  Text("Metrics refresh every 2 seconds. CPU is this app's process usage, not total device CPU. The profile is currently a preference only; Android does not expose general CPU/GPU clock control to ordinary apps.", color = Quiet, fontSize = 11.sp)
+ } 
 }
 
 @Composable
