@@ -45,7 +45,24 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                     Text("Windows compatibility", style = MaterialTheme.typography.titleMedium)
                     Text(windows.detail, style = MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick = { installerPicker.launch(arrayOf("application/vnd.microsoft.portable-executable", "application/x-msdownload", "application/octet-stream")) }) { Text("Select EXE/MSI installer") }
-                    selectedInstaller?.let { Text("Selected: ${it.name}", style = MaterialTheme.typography.bodySmall) }
+                    selectedInstaller?.let { staged ->
+                        Text("Selected: ${staged.name}", style = MaterialTheme.typography.bodySmall)
+                        if (windows.state == WindowsBackendState.READY) {
+                            Button(onClick = {
+                                scope.launch {
+                                    installerStatus = "Running Windows installer…"
+                                    runCatching {
+                                        withContext(Dispatchers.IO) {
+                                            val process = windowsManager.install(staged)
+                                            val output = process.inputStream.bufferedReader().use { it.readText() }
+                                            process.waitFor() to output
+                                        }
+                                    }.onSuccess { (code, output) -> installerStatus = "Installer exit code: $code\\n" + output.take(1500) }
+                                     .onFailure { installerStatus = it.message ?: "Windows installer could not start." }
+                                }
+                            }) { Text("Install selected package") }
+                        }
+                    }
                     if (installerStatus.isNotBlank()) Text(installerStatus, style = MaterialTheme.typography.labelSmall)
                     Spacer(Modifier.height(8.dp))
                     Text("Linux desktop runtime", style = MaterialTheme.typography.titleMedium)
