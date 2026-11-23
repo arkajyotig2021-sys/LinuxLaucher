@@ -4,3 +4,6 @@ local.properties
 /build/
 /app/build/
 *.iml
+
+third_party/oonid-pr-source.tar.gz
+proot-engine/

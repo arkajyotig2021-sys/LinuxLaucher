@@ -11,12 +11,13 @@ android {
   applicationId = "app.nova.desktop"
   minSdk = 24
   targetSdk = 35
-  versionCode = 3
-  versionName = "0.3.0"
+  versionCode = 4
+  versionName = "0.4.0"
   testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
  }
  buildFeatures { compose = true }
+ packaging { jniLibs { useLegacyPackaging = true } }
  externalNativeBuild {
   cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
  }
@@ -35,6 +36,7 @@ dependencies {
  implementation("androidx.documentfile:documentfile:1.0.1")
  implementation("org.apache.commons:commons-compress:1.27.1")
  implementation("commons-io:commons-io:2.17.0")
+ implementation(project(":proot-engine"))
  debugImplementation("androidx.compose.ui:ui-tooling")
  testImplementation("junit:junit:4.13.2")
  androidTestImplementation("androidx.test.ext:junit:1.2.1")
