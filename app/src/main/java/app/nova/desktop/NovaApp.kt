@@ -36,9 +36,17 @@ private val Quiet = Color(0xFF788196)
 
 @Composable
 fun NovaApp(tree: Uri?, chooseFolder: () -> Unit) {
+ val context = LocalContext.current
+ val preferences = remember(context) { context.getSharedPreferences("nova", Context.MODE_PRIVATE) }
  var page by remember { mutableStateOf("Home") }
- var dark by remember { mutableStateOf(false) }
- var profile by remember { mutableStateOf("Smooth") }
+ var dark by remember { mutableStateOf(preferences.getBoolean("dark_appearance", false)) }
+ var profile by remember { mutableStateOf(preferences.getString("performance_profile", "Smooth") ?: "Smooth") }
+ LaunchedEffect(dark, profile) {
+  preferences.edit()
+   .putBoolean("dark_appearance", dark)
+   .putString("performance_profile", profile)
+   .apply()
+ }
  var window by remember { mutableStateOf<String?>(null) }
  val colors = if (dark) darkColorScheme(primary = Color(0xFF9AA8FF)) else lightColorScheme(primary = NovaBlue)
  MaterialTheme(colorScheme = colors) {
@@ -241,7 +249,12 @@ private fun SettingsScreen(dark: Boolean, setDark: (Boolean) -> Unit, profile: S
 
 @Composable
 private fun NovaWindow(name: String, onClose: () -> Unit) {
- var note by remember { mutableStateOf("") }
+ val context = LocalContext.current
+ val preferences = remember(context) { context.getSharedPreferences("nova", Context.MODE_PRIVATE) }
+ var note by remember { mutableStateOf(preferences.getString("notes_document", "") ?: "") }
+ LaunchedEffect(note) {
+  if (name == "Notes") preferences.edit().putString("notes_document", note).apply()
+ }
  Dialog(onDismissRequest = onClose) {
   Card(shape = RoundedCornerShape(18.dp)) {
    Column {
