@@ -63,7 +63,7 @@ private val NovaPurple=Color(0xFF9B75FF)
 @Composable private fun Shortcut(name:String,icon:androidx.compose.ui.graphics.vector.ImageVector,tint:Color,modifier:Modifier=Modifier,onClick:()->Unit){Card(modifier.clickable(onClick=onClick),shape=RoundedCornerShape(17.dp),colors=CardDefaults.cardColors(containerColor=Color(0x7A26395E)),border=androidx.compose.foundation.BorderStroke(1.dp,Color(0x405C8DDB))){Column(Modifier.fillMaxWidth().padding(vertical=13.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(icon,null,tint=tint,modifier=Modifier.size(25.dp));Spacer(Modifier.height(6.dp));Text(name,color=Color.White,fontSize=10.sp,fontWeight=FontWeight.SemiBold)}}}
 @Composable private fun NovaWindowContent(title:String,tree:Uri?,chooseFolder:()->Unit,onOpen:(String)->Unit,onProfile:(String)->Unit){
  val context=LocalContext.current
- when(title){"Files"->FileManagerScreen(tree,chooseFolder);"Apps"->RuntimeAppsScreen(onOpen);"Linux"->{val m=remember(context){LinuxRuntimeManager(context)};val s=remember{m.status()};Column(verticalArrangement=Arrangement.spacedBy(9.dp)){Text("Linux environment",style=MaterialTheme.typography.titleLarge);Text(s.detail,style=MaterialTheme.typography.bodySmall);when(s.state){LinuxInstallState.READY->Button(onClick={onOpen("Linux Terminal")}){Text("Open Alpine terminal")};LinuxInstallState.NOT_INSTALLED->Button(onClick={onOpen("Linux Installer")}){Text("Install Alpine Linux")};else->Text("Linux unavailable for this Android version or ABI.")};Text("Graphical Linux desktops are not integrated yet.",style=MaterialTheme.typography.bodySmall)}};"Linux Terminal"->LinuxTerminalScreen(LinuxTerminalMode.LOGIN);"Linux Installer"->LinuxTerminalScreen(LinuxTerminalMode.INSTALL);"Downloads"->DownloadCenterScreen();"Performance"->NovaPerformance(onProfile);"Settings"->NovaSettings();"Notes"->NovaNotes();"System Monitor"->NovaPerformance(onProfile);else->Text("This NOVA module is not available yet.")}
+ when(title){"Files"->FileManagerScreen(tree,chooseFolder);"Apps"->RuntimeAppsScreen(onOpen);"Linux"->LinuxEnvironmentPanel(onOpen);"Linux Terminal"->LinuxTerminalScreen(LinuxTerminalMode.LOGIN);"Linux Installer"->LinuxTerminalScreen(LinuxTerminalMode.INSTALL);"Downloads"->DownloadCenterScreen();"Performance"->NovaPerformance(onProfile);"Settings"->NovaSettings();"Notes"->NovaNotes();"System Monitor"->NovaPerformance(onProfile);else->Text("This NOVA module is not available yet.")}
 }
 @Composable private fun NovaPerformance(onProfile:(String)->Unit){val ctx=LocalContext.current;var pss by remember{mutableIntStateOf(0)};var ram by remember{mutableIntStateOf(0)};var cpu by remember{mutableIntStateOf(0)}
  LaunchedEffect(Unit){var c=android.os.Process.getElapsedCpuTime();var t=android.os.SystemClock.elapsedRealtime();while(true){delay(2000);val nc=android.os.Process.getElapsedCpuTime();val nt=android.os.SystemClock.elapsedRealtime();cpu=(((nc-c).coerceAtLeast(0)*100)/(nt-t).coerceAtLeast(1)).toInt().coerceIn(0,100);c=nc;t=nt;pss=android.os.Debug.getPss()/1024;val mi=android.app.ActivityManager.MemoryInfo();(ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi);ram=(mi.availMem/1048576L).toInt()}}
@@ -72,3 +72,32 @@ private val NovaPurple=Color(0xFF9B75FF)
 @Composable private fun Metric(label:String,value:String){Card{Row(Modifier.fillMaxWidth().padding(10.dp),horizontalArrangement=Arrangement.SpaceBetween){Text(label,style=MaterialTheme.typography.bodySmall);Text(value,fontWeight=FontWeight.Bold)}}}
 @Composable private fun NovaSettings(){var theme by remember{mutableStateOf("NOVA Neon")};var anim by remember{mutableStateOf(true)};Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Desktop settings",style=MaterialTheme.typography.titleLarge);listOf("NOVA Neon","Windows 11 inspired","Windows XP inspired","Linux inspired","macOS inspired").forEach{OutlinedButton(onClick={theme=it},modifier=Modifier.fillMaxWidth()){Text(if(theme==it)"✓  $it" else it)}};Row(verticalAlignment=Alignment.CenterVertically){Text("Animations",modifier=Modifier.weight(1f));Switch(anim,{anim=it})};Text("Themes change NOVA's shell, not the underlying operating system.",style=MaterialTheme.typography.bodySmall)}}
 @Composable private fun NovaNotes(){var note by remember{mutableStateOf("")};Column{Text("NOVA Notes",style=MaterialTheme.typography.titleLarge);OutlinedTextField(note,{note=it},modifier=Modifier.fillMaxSize(),placeholder={Text("Write something…")})}}
+
+@Composable private fun LinuxEnvironmentPanel(onOpen:(String)->Unit){
+ val context=LocalContext.current
+ val manager=remember(context){LinuxRuntimeManager(context)}
+ val status=remember{manager.status()}
+ val freeMb=remember{runCatching{android.os.StatFs(context.filesDir.path).availableBytes/1048576L}.getOrDefault(0L)}
+ var confirm by remember{mutableStateOf(false)}
+ Column(verticalArrangement=Arrangement.spacedBy(9.dp)){
+  Text("Linux environment",style=MaterialTheme.typography.titleLarge)
+  Text(status.detail,style=MaterialTheme.typography.bodySmall)
+  when(status.state){
+   LinuxInstallState.READY->Button(onClick={onOpen("Linux Terminal")}){Text("Open Alpine terminal")}
+   LinuxInstallState.NOT_INSTALLED->Button(onClick={confirm=true}){Text("Install Alpine Linux")}
+   else->Text("Linux unavailable for this Android version or ABI.")
+  }
+  Text("Available NOVA storage: $freeMb MB",style=MaterialTheme.typography.bodySmall)
+  Text("Graphical Linux desktops are not integrated yet.",style=MaterialTheme.typography.bodySmall)
+ }
+ if(confirm) AlertDialog(onDismissRequest={confirm=false},title={Text("Install Alpine Linux?")},
+  text={Column(verticalArrangement=Arrangement.spacedBy(5.dp)){
+   Text("NOVA will download Alpine Linux image layers from the Docker registry and install them in NOVA's private app storage.")
+   Text("Transfer size: determined by the registry at download time.")
+   Text("Available storage: $freeMb MB. Additional space is needed for extraction and packages.")
+   Text("Source: docker.io/library/alpine")
+   Text("No root access or Termux is required. You can cancel the installer window.")
+  }},
+  confirmButton={TextButton(onClick={confirm=false;onOpen("Linux Installer")}){Text("Download and install")}},
+  dismissButton={TextButton(onClick={confirm=false}){Text("Cancel")}})
+}

@@ -27,6 +27,7 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var selectedInstaller by remember { mutableStateOf<java.io.File?>(null) }
     var installerStatus by remember { mutableStateOf("") }
+    var confirmInstaller by remember { mutableStateOf(false) }
     val installerPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             runCatching { withContext(Dispatchers.IO) { windowsManager.stageInstaller(uri) } }
@@ -47,19 +48,7 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
                     selectedInstaller?.let { staged ->
                         Text("Selected: ${staged.name}", style = MaterialTheme.typography.bodySmall)
                         if (windows.state == WindowsBackendState.READY) {
-                            Button(onClick = {
-                                scope.launch {
-                                    installerStatus = "Running Windows installer…"
-                                    runCatching {
-                                        withContext(Dispatchers.IO) {
-                                            val process = windowsManager.install(staged)
-                                            val output = process.inputStream.bufferedReader().use { it.readText() }
-                                            process.waitFor() to output
-                                        }
-                                    }.onSuccess { (code, output) -> installerStatus = "Installer exit code: $code\\n" + output.take(1500) }
-                                     .onFailure { installerStatus = it.message ?: "Windows installer could not start." }
-                                }
-                            }) { Text("Install selected package") }
+                            Button(onClick = { confirmInstaller = true }) { Text("Review installation") }
                         }
                     }
                     if (installerStatus.isNotBlank()) Text(installerStatus, style = MaterialTheme.typography.labelSmall)
@@ -103,6 +92,43 @@ fun RuntimeAppsScreen(openBuiltIn: (String) -> Unit) {
             Text("Window asks Android to open an app in a system-managed freeform window. The device firmware may ignore this request. NOVA cannot embed arbitrary third-party Activities inside its own windows.",
                 style = MaterialTheme.typography.bodySmall)
         }
+    }
+    if (confirmInstaller && selectedInstaller != null) {
+        val staged = selectedInstaller!!
+        val sha = remember(staged) { windowsManager.installerSha256(staged) }
+        AlertDialog(
+            onDismissRequest = { confirmInstaller = false },
+            title = { Text("Install this Windows package?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(staged.name, style = MaterialTheme.typography.titleMedium)
+                    Text("File size: ${staged.length() / 1024} KB")
+                    Text("SHA-256: $sha")
+                    Text("Publisher: not verified by NOVA")
+                    Text("Destination: NOVA private Wine prefix")
+                    Text("Required runtime: Wine + Box64")
+                    Text("Permissions and dependencies: determined by the installer and Wine runtime")
+                    Text("Only continue if you trust this installer. NOVA cannot guarantee Windows application compatibility.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmInstaller = false
+                    scope.launch {
+                        installerStatus = "Running Windows installer…"
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                val process = windowsManager.install(staged)
+                                val output = process.inputStream.bufferedReader().use { it.readText() }
+                                process.waitFor() to output
+                            }
+                        }.onSuccess { (code, output) -> installerStatus = "Installer exit code: $code\\n" + output.take(1500) }
+                         .onFailure { installerStatus = it.message ?: "Windows installer could not start." }
+                    }
+                }) { Text("Install") }
+            },
+            dismissButton = { TextButton(onClick = { confirmInstaller = false }) { Text("Cancel") } }
+        )
     }
 }
 
